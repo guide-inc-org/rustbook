@@ -122,7 +122,17 @@ fn serve_book(source: &PathBuf, port: u16) -> Result<()> {
     watcher.watch(source, RecursiveMode::Recursive)?;
 
     let addr = format!("0.0.0.0:{}", port);
-    let server = Server::http(&addr).map_err(|e| anyhow::anyhow!("Failed to start server: {}", e))?;
+    let server = Server::http(&addr).map_err(|e| {
+        if e.to_string().contains("Address already in use") {
+            anyhow::anyhow!(
+                "Port {} is already in use.\n   Try: guidebook serve -p {}",
+                port,
+                port + 1
+            )
+        } else {
+            anyhow::anyhow!("Failed to start server: {}", e)
+        }
+    })?;
 
     println!("\n📚 Serving book at http://localhost:{}/", port);
     println!("   🔥 Hot reload enabled - changes will auto-refresh");
