@@ -441,6 +441,7 @@ dependencies = [
  "clap",
  "notify",
  "pathdiff",
+ "percent-encoding",
  "pulldown-cmark",
  "serde",
  "serde_json",

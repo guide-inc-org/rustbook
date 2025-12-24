@@ -9,6 +9,7 @@ use std::sync::{Arc, atomic::{AtomicU64, Ordering}};
 use tiny_http::{Server, Response, Header};
 use notify::{Watcher, RecursiveMode, Event, EventKind};
 use notify::event::ModifyKind;
+use percent_encoding::percent_decode_str;
 
 const VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -169,14 +170,18 @@ fn serve_book(source: &PathBuf, port: u16) -> Result<()> {
         }
 
         let url_path = if url == "/" {
-            "/index.html"
+            "/index.html".to_string()
         } else if url.ends_with('/') {
-            &format!("{}index.html", url)
+            format!("{}index.html", url)
         } else {
-            &url
+            url.clone()
         };
 
-        let file_path = temp_dir.join(url_path.trim_start_matches('/'));
+        // URL decode the path to handle Japanese/special characters
+        let decoded_path = percent_decode_str(&url_path)
+            .decode_utf8_lossy()
+            .to_string();
+        let file_path = temp_dir.join(decoded_path.trim_start_matches('/'));
 
         if file_path.exists() && file_path.is_file() {
             let mut content = fs::read(&file_path).unwrap_or_default();
