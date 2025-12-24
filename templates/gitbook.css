@@ -150,9 +150,9 @@ body {
 }
 
 .page-inner {
-    max-width: 900px;
-    margin: 0 auto;
-    padding: 40px;
+    max-width: none;
+    margin: 0;
+    padding: 40px 60px;
 }
 
 /* Markdown content */
@@ -328,34 +328,7 @@ body {
     transition: none !important;
 }
 
-/* Responsive */
-@media (max-width: 1024px) {
-    .book-summary {
-        width: 250px;
-        min-width: 250px;
-    }
-    .book-body {
-        margin-left: 250px;
-    }
-}
-
-@media (max-width: 768px) {
-    .book-summary {
-        transform: translateX(-100%);
-        transition: transform 0.3s;
-    }
-    .book-summary.open {
-        transform: translateX(0);
-    }
-    .book-body {
-        margin-left: 0;
-    }
-    .page-inner {
-        padding: 20px;
-    }
-}
-
-/* Sidebar toggle button */
+/* Sidebar toggle button - BASE STYLES */
 .sidebar-toggle {
     position: fixed;
     top: 10px;
@@ -404,11 +377,56 @@ body {
     transition: margin-left 0.3s ease;
 }
 
+/* Responsive - MUST come after base styles */
 @media (max-width: 1024px) {
+    .book-summary {
+        width: 250px;
+        min-width: 250px;
+    }
+    .book-body {
+        margin-left: 250px;
+    }
     .sidebar-toggle {
         left: 260px;
     }
     .book.sidebar-hidden .sidebar-toggle {
         left: 10px;
+    }
+}
+
+@media (max-width: 768px) {
+    .book-summary {
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+        width: 280px;
+        min-width: 280px;
+        padding-top: 50px; /* Space for hamburger button */
+    }
+    .book-summary.open {
+        transform: translateX(0);
+    }
+    .book-body {
+        margin-left: 0;
+    }
+    .page-inner {
+        padding: 20px;
+        padding-top: 60px; /* Space for fixed header */
+    }
+    /* Mobile: hamburger button always in top-left */
+    .sidebar-toggle {
+        left: 10px !important;
+        top: 10px;
+        z-index: 200;
+    }
+    /* Overlay when sidebar is open */
+    .book-summary.open::after {
+        content: "";
+        position: fixed;
+        top: 0;
+        left: 280px;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.3);
+        z-index: 99;
     }
 }

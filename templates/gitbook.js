@@ -23,30 +23,69 @@
     // Sidebar toggle
     var sidebarToggle = document.querySelector('.sidebar-toggle');
     var book = document.querySelector('.book');
-    if (sidebarToggle && book) {
-        // Restore sidebar state from localStorage
-        var sidebarHidden = localStorage.getItem('rustbook-sidebar-hidden') === 'true';
-        if (sidebarHidden) {
-            book.classList.add('sidebar-hidden');
+    var bookSummary = document.querySelector('.book-summary');
+
+    function isMobile() {
+        return window.innerWidth <= 768;
+    }
+
+    var wasMobile = isMobile();
+
+    if (sidebarToggle && book && bookSummary) {
+        // Restore sidebar state from localStorage (desktop only)
+        if (!isMobile()) {
+            var sidebarHidden = localStorage.getItem('rustbook-sidebar-hidden') === 'true';
+            if (sidebarHidden) {
+                book.classList.add('sidebar-hidden');
+            }
         }
 
         sidebarToggle.addEventListener('click', function() {
-            book.classList.add('sidebar-toggling');
-            book.classList.toggle('sidebar-hidden');
-            var isHidden = book.classList.contains('sidebar-hidden');
-            localStorage.setItem('rustbook-sidebar-hidden', isHidden);
-            setTimeout(function() {
-                book.classList.remove('sidebar-toggling');
-            }, 350);
+            if (isMobile()) {
+                // Mobile: toggle .open on sidebar
+                bookSummary.classList.toggle('open');
+            } else {
+                // Desktop: toggle .sidebar-hidden on book
+                book.classList.add('sidebar-toggling');
+                book.classList.toggle('sidebar-hidden');
+                var isHidden = book.classList.contains('sidebar-hidden');
+                localStorage.setItem('rustbook-sidebar-hidden', isHidden);
+                setTimeout(function() {
+                    book.classList.remove('sidebar-toggling');
+                }, 350);
+            }
         });
-    }
 
-    // Mobile menu toggle (legacy)
-    var menuToggle = document.querySelector('.menu-toggle');
-    var bookSummary = document.querySelector('.book-summary');
-    if (menuToggle && bookSummary) {
-        menuToggle.addEventListener('click', function() {
-            bookSummary.classList.toggle('open');
+        // Close sidebar when clicking outside on mobile
+        document.addEventListener('click', function(e) {
+            if (isMobile() && bookSummary.classList.contains('open')) {
+                if (!bookSummary.contains(e.target) && !sidebarToggle.contains(e.target)) {
+                    bookSummary.classList.remove('open');
+                }
+            }
+        });
+
+        // Handle resize: switch between mobile and desktop modes
+        window.addEventListener('resize', function() {
+            var nowMobile = isMobile();
+            if (wasMobile !== nowMobile) {
+                if (nowMobile) {
+                    // Switched to mobile: reset desktop state, close sidebar
+                    book.classList.remove('sidebar-hidden');
+                    book.classList.remove('sidebar-toggling');
+                    bookSummary.classList.remove('open');
+                } else {
+                    // Switched to desktop: reset mobile state, restore desktop state
+                    bookSummary.classList.remove('open');
+                    var sidebarHidden = localStorage.getItem('rustbook-sidebar-hidden') === 'true';
+                    if (sidebarHidden) {
+                        book.classList.add('sidebar-hidden');
+                    } else {
+                        book.classList.remove('sidebar-hidden');
+                    }
+                }
+                wasMobile = nowMobile;
+            }
         });
     }
 

@@ -12,6 +12,9 @@ A fast, HonKit/GitBook-compatible static site generator written in Rust.
 - **SPA Navigation** - Smooth page transitions without full page reloads
 - **Japanese Support** - Proper handling of Japanese characters in heading IDs and anchors
 - **Full-width Space Tolerance** - Automatically handles full-width spaces in Markdown headings
+- **Custom Styles** - Load custom CSS from `styles/website.css`
+- **Auto-link URLs** - Bare URLs are automatically converted to clickable links
+- **Sidebar State Persistence** - Sidebar open/close state is saved in localStorage
 
 ## Installation
 
@@ -59,15 +62,40 @@ my-book/
 {
   "title": "My Book",
   "plugins": ["collapsible-chapters"],
-  "pluginsConfig": {
-    "theme-default": {
-      "styles": {
-        "website": "styles/website.css"
-      }
-    }
+  "styles": {
+    "website": "styles/website.css"
   }
 }
 ```
+
+### Custom Styles (styles/website.css)
+
+You can customize fonts and styles by creating `styles/website.css`:
+
+```css
+/* Google Fonts for Japanese */
+@import url(https://fonts.googleapis.com/css?family=Noto+Sans+JP|Noto+Serif+JP|Roboto+Mono&display=swap&subset=japanese);
+
+/* Apply Noto Sans JP to the book */
+.book.font-family-1 {
+    font-family: "Noto Sans JP", "メイリオ", sans-serif;
+}
+
+/* Custom heading styles */
+.markdown-section h2 {
+    border-left: 7px solid rgb(16, 122, 126);
+    padding-left: 10px;
+    background-color: rgb(244, 244, 244);
+}
+
+/* Code font */
+.markdown-section pre,
+.markdown-section code {
+    font-family: "Roboto Mono", Consolas, monospace;
+}
+```
+
+The CSS file path is configured in `book.json` under `styles.website`.
 
 ### SUMMARY.md
 
@@ -106,6 +134,9 @@ my-book/
 | Custom styles | ✅ |
 | Anchor links with Japanese text | ✅ |
 | SPA-like navigation | ✅ |
+| Auto-link URLs | ✅ |
+| Sidebar state persistence | ✅ |
+| Image paths with spaces | ✅ |
 
 ## Development
 

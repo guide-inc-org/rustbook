@@ -262,34 +262,107 @@ fn generate_lang_index(output: &Path, languages: &[Language], config: &BookConfi
     let mut lang_links = String::new();
     for lang in languages {
         lang_links.push_str(&format!(
-            r#"<li><a href="{}/index.html">{}</a></li>"#,
+            r#"
+            <li>
+                <a href="{}/">{}</a>
+            </li>
+        "#,
             lang.code, lang.title
         ));
     }
 
     let html = format!(
-        r#"<!DOCTYPE html>
-<html>
-<head>
-    <meta charset="UTF-8">
-    <title>{}</title>
-    <style>
-        body {{ font-family: sans-serif; max-width: 600px; margin: 50px auto; padding: 20px; }}
-        h1 {{ color: #333; }}
-        ul {{ list-style: none; padding: 0; }}
-        li {{ margin: 10px 0; }}
-        a {{ color: #4183c4; text-decoration: none; font-size: 1.2em; }}
-        a:hover {{ text-decoration: underline; }}
-    </style>
-</head>
-<body>
-    <h1>{}</h1>
-    <ul>{}</ul>
-</body>
+        r#"<!DOCTYPE HTML>
+<html lang="" >
+    <head>
+        <meta charset="UTF-8">
+        <title>Choose a language · {}</title>
+        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+        <meta name="description" content="">
+        <meta name="generator" content="rustbook">
+        <link rel="stylesheet" href="gitbook/style.css">
+        <meta name="HandheldFriendly" content="true"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+        <meta name="apple-mobile-web-app-capable" content="yes">
+        <meta name="apple-mobile-web-app-status-bar-style" content="black">
+        <link rel="apple-touch-icon-precomposed" sizes="152x152" href="gitbook/images/apple-touch-icon-precomposed-152.png">
+        <link rel="shortcut icon" href="gitbook/images/favicon.ico" type="image/x-icon">
+    </head>
+    <body>
+
+<div class="book-langs-index" role="navigation">
+    <div class="inner">
+        <h3>Choose a language</h3>
+
+        <ul class="languages">
+        {}
+        </ul>
+    </div>
+</div>
+
+    </body>
 </html>"#,
-        title, title, lang_links
+        title, lang_links
     );
 
     fs::write(output.join("index.html"), html)?;
+
+    // Copy gitbook static files to root for the language selector page
+    copy_gitbook_static_to_root(output)?;
+
+    Ok(())
+}
+
+fn copy_gitbook_static_to_root(output: &Path) -> Result<()> {
+    let gitbook_dir = output.join("gitbook");
+    fs::create_dir_all(&gitbook_dir)?;
+
+    // Create a minimal style.css for the language selector page
+    let style_css = r#"
+.book-langs-index {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+
+.book-langs-index .inner {
+    text-align: center;
+}
+
+.book-langs-index h3 {
+    color: #333;
+    font-size: 1.5em;
+    margin-bottom: 1em;
+}
+
+.book-langs-index .languages {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.book-langs-index .languages li {
+    margin: 0.5em 0;
+}
+
+.book-langs-index .languages a {
+    color: #4183c4;
+    text-decoration: none;
+    font-size: 1.2em;
+}
+
+.book-langs-index .languages a:hover {
+    text-decoration: underline;
+}
+"#;
+
+    fs::write(gitbook_dir.join("style.css"), style_css)?;
+
+    // Create images directory with placeholder favicon
+    let images_dir = gitbook_dir.join("images");
+    fs::create_dir_all(&images_dir)?;
+
     Ok(())
 }

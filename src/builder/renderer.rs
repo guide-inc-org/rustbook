@@ -22,6 +22,8 @@ pub fn render_markdown(content: &str) -> String {
 fn render_markdown_internal(content: &str) -> String {
     // Preprocess: fix full-width spaces after heading markers
     let content = fix_fullwidth_heading_spaces(content);
+    // Preprocess: fix image paths with spaces
+    let content = fix_image_paths_with_spaces(&content);
 
     let mut options = Options::empty();
     options.insert(Options::ENABLE_TABLES);
@@ -110,6 +112,9 @@ fn render_markdown_internal(content: &str) -> String {
     // Fix relative links: convert .md to .html
     html_output = fix_relative_links(&html_output);
 
+    // Auto-link URLs that are not already linked
+    html_output = autolink_urls(&html_output);
+
     html_output
 }
 
@@ -185,6 +190,80 @@ fn fix_fullwidth_heading_spaces(content: &str) -> String {
         .join("\n")
 }
 
+/// Fix image paths that contain spaces by wrapping them in angle brackets
+/// Converts ![alt](path with space.png) to ![alt](<path with space.png>)
+fn fix_image_paths_with_spaces(content: &str) -> String {
+    let mut result = String::new();
+    let mut chars = content.chars().peekable();
+
+    while let Some(c) = chars.next() {
+        if c == '!' {
+            // Check for image syntax: ![...](...)
+            if chars.peek() == Some(&'[') {
+                // Collect the entire potential image syntax
+                let mut img_str = String::from("!");
+                img_str.push(chars.next().unwrap()); // '['
+
+                // Read alt text until ']'
+                let mut bracket_depth = 1;
+                while let Some(&ch) = chars.peek() {
+                    img_str.push(chars.next().unwrap());
+                    if ch == '[' {
+                        bracket_depth += 1;
+                    } else if ch == ']' {
+                        bracket_depth -= 1;
+                        if bracket_depth == 0 {
+                            break;
+                        }
+                    }
+                }
+
+                // Check for '(' after ']'
+                if chars.peek() == Some(&'(') {
+                    img_str.push(chars.next().unwrap()); // '('
+
+                    // Read URL until ')'
+                    let mut url = String::new();
+                    let mut paren_depth = 1;
+                    while let Some(&ch) = chars.peek() {
+                        if ch == '(' {
+                            paren_depth += 1;
+                            url.push(chars.next().unwrap());
+                        } else if ch == ')' {
+                            paren_depth -= 1;
+                            if paren_depth == 0 {
+                                chars.next(); // consume ')'
+                                break;
+                            }
+                            url.push(chars.next().unwrap());
+                        } else {
+                            url.push(chars.next().unwrap());
+                        }
+                    }
+
+                    // Check if URL contains spaces and doesn't already use angle brackets
+                    if url.contains(' ') && !url.starts_with('<') {
+                        img_str.push('<');
+                        img_str.push_str(&url);
+                        img_str.push('>');
+                    } else {
+                        img_str.push_str(&url);
+                    }
+                    img_str.push(')');
+                }
+
+                result.push_str(&img_str);
+            } else {
+                result.push(c);
+            }
+        } else {
+            result.push(c);
+        }
+    }
+
+    result
+}
+
 fn fix_relative_links(html: &str) -> String {
     // Replace .md links with .html
     // Pattern: href="...*.md" or href='...*.md'
@@ -200,6 +279,77 @@ fn fix_relative_links(html: &str) -> String {
 
     for (from, to) in patterns {
         result = result.replace(from, to);
+    }
+
+    result
+}
+
+/// Auto-link URLs that are not already inside anchor tags
+/// Converts bare URLs like https://example.com to <a href="..." target="_blank">...</a>
+fn autolink_urls(html: &str) -> String {
+    let mut result = String::new();
+    let mut chars = html.char_indices().peekable();
+
+    while let Some((i, c)) = chars.next() {
+        // Check if we're inside an HTML tag
+        if c == '<' {
+            result.push(c);
+            // Copy until we find '>'
+            while let Some((_, ch)) = chars.next() {
+                result.push(ch);
+                if ch == '>' {
+                    break;
+                }
+            }
+            continue;
+        }
+
+        // Check for http:// or https://
+        if c == 'h' && html[i..].starts_with("http://") || html[i..].starts_with("https://") {
+            // Check if this URL is already inside an href=""
+            if result.ends_with("href=\"") || result.ends_with("src=\"") {
+                // Already in an href, just copy normally
+                result.push(c);
+                continue;
+            }
+
+            // Extract the URL
+            let url_start = i;
+            let mut url_end = i + 1;
+
+            // Continue consuming URL characters
+            while let Some(&(next_i, next_c)) = chars.peek() {
+                // URL ends at whitespace, <, >, ", '
+                if next_c.is_whitespace() || next_c == '<' || next_c == '>'
+                    || next_c == '"' || next_c == '\'' {
+                    break;
+                }
+                url_end = next_i + next_c.len_utf8();
+                chars.next();
+            }
+
+            let mut url = &html[url_start..url_end];
+
+            // Remove trailing punctuation that's likely not part of URL
+            while url.ends_with('.') || url.ends_with(',') || url.ends_with(';')
+                || url.ends_with(':') || url.ends_with(')') || url.ends_with('!') || url.ends_with('?') {
+                url = &url[..url.len() - 1];
+            }
+
+            // Create the link with target="_blank"
+            result.push_str(&format!(
+                r#"<a href="{}" target="_blank">{}</a>"#,
+                url, url
+            ));
+
+            // If we trimmed trailing punctuation, add it back
+            let trimmed_len = url_end - url_start - url.len();
+            if trimmed_len > 0 {
+                result.push_str(&html[url_start + url.len()..url_end]);
+            }
+        } else {
+            result.push(c);
+        }
     }
 
     result
@@ -310,7 +460,8 @@ mod tests {
     fn test_render_basic_markdown() {
         let md = "# Hello\n\nThis is a **test**.";
         let html = render_markdown(md);
-        assert!(html.contains("<h1>Hello</h1>"));
+        // Heading now includes ID attribute
+        assert!(html.contains("<h1 id=\"hello\">Hello</h1>"), "HTML: {}", html);
         assert!(html.contains("<strong>test</strong>"));
     }
 
@@ -344,5 +495,63 @@ sequenceDiagram
         let html = r#"<a href="chapter1.md">Link</a>"#;
         let fixed = fix_relative_links(html);
         assert!(fixed.contains(r#"href="chapter1.html""#));
+    }
+
+    #[test]
+    fn test_image_in_table() {
+        let md = r#"
+| Col1 | Col2 |
+|:--:|:--:|
+|![](test.png)|text|
+"#;
+        let html = render_markdown(md);
+        println!("Generated HTML: {}", html);
+        assert!(html.contains("<img"), "Image tag should be generated: {}", html);
+    }
+
+    #[test]
+    fn test_image_in_table_japanese() {
+        let md = r#"## デザイン
+|該当するタイムラインがある場合|該当するタイムラインがない場合|
+|:--:|:--:|
+|![](../../../assets/Customer/TimeLine/B-0-8-Timeline Information Page.png)|![](../../../assets/Customer/TimeLine/B-0-8-Timeline Information Page0件.png)|
+## 項目一覧"#;
+        let html = render_markdown(md);
+        println!("Generated HTML: {}", html);
+        assert!(html.contains("<img"), "Image tag should be generated: {}", html);
+    }
+
+    #[test]
+    fn test_image_with_space_in_filename() {
+        // Test: space in filename
+        let md = r#"|![](test file.png)|"#;
+        let html = render_markdown(md);
+        println!("With space: {}", html);
+
+        // Test: no space in filename
+        let md2 = r#"|![](testfile.png)|"#;
+        let html2 = render_markdown(md2);
+        println!("No space: {}", html2);
+    }
+
+    #[test]
+    fn test_autolink_urls() {
+        // Test: bare URL should become a link
+        let md = "Guide Git:https://github.com/guide-inc-org/kcmsr-member-site-spec";
+        let html = render_markdown(md);
+        println!("Autolink result: {}", html);
+        assert!(html.contains(r#"<a href="https://github.com/guide-inc-org/kcmsr-member-site-spec" target="_blank">"#),
+            "URL should be auto-linked: {}", html);
+    }
+
+    #[test]
+    fn test_autolink_does_not_double_link() {
+        // Test: already linked URL should not be double-linked
+        let md = "[Link](https://example.com)";
+        let html = render_markdown(md);
+        println!("Already linked result: {}", html);
+        // Should have exactly one href for the URL
+        let count = html.matches("https://example.com").count();
+        assert_eq!(count, 1, "URL should appear only once: {}", html);
     }
 }
