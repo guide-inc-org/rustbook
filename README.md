@@ -29,9 +29,9 @@ curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
 
 **Windows:**
 
-https://rustup.rs/ からインストーラーをダウンロードして実行してください。
+Download and run the installer from https://rustup.rs/
 
-インストール後、ターミナルを再起動してください。
+After installation, restart your terminal.
 
 ### Step 2: Install guidebook
 
@@ -48,16 +48,16 @@ guidebook --version
 ## Quick Start
 
 ```bash
-# ドキュメントのあるフォルダに移動
+# Navigate to your book folder
 cd your-book-folder
 
-# プレビューサーバーを起動（ホットリロード付き）
+# Start preview server with hot reload
 guidebook serve
 
-# ブラウザで http://localhost:4000 を開く
+# Open http://localhost:4000 in your browser
 ```
 
-### From Source (開発者向け)
+### From Source (for developers)
 
 ```bash
 git clone https://github.com/guide-inc-org/guidebook.git
