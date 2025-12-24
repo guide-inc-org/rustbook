@@ -1,0 +1,11 @@
+# Rust build output
+/target/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store

@@ -1,0 +1,414 @@
+/* GitBook-compatible base styles */
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    padding: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 16px;
+    line-height: 1.6;
+    color: #333;
+}
+
+/* Font family classes */
+.font-family-0 { font-family: Georgia, serif; }
+.font-family-1 { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; }
+
+/* Book layout */
+.book {
+    display: flex;
+    min-height: 100vh;
+}
+
+/* Sidebar */
+.book-summary {
+    width: 300px;
+    min-width: 300px;
+    background: #fafafa;
+    border-right: 1px solid #e8e8e8;
+    overflow-y: auto;
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    z-index: 100;
+}
+
+.book-summary nav {
+    padding: 20px 0;
+}
+
+.book-summary .summary {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.book-summary .summary li {
+    list-style: none;
+}
+
+.book-summary .summary li.chapter {
+    margin: 0;
+}
+
+.book-summary .summary li.chapter a,
+.book-summary .summary li.chapter .chapter-title {
+    display: block;
+    padding: 8px 15px 8px 20px;
+    color: #364149;
+    text-decoration: none;
+    font-size: 14px;
+    border-left: 3px solid transparent;
+}
+
+.book-summary .summary li.chapter a:hover {
+    background: #f0f0f0;
+    color: #008cff;
+}
+
+.book-summary .summary li.chapter.active > a {
+    background: #e8e8e8;
+    border-left-color: #008cff;
+    color: #008cff;
+    font-weight: 600;
+}
+
+.book-summary .summary li.chapter .chapter-title {
+    color: #888;
+    font-weight: 600;
+    cursor: default;
+}
+
+/* Nested chapters */
+.book-summary .summary .articles {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.book-summary .summary .articles li.chapter a,
+.book-summary .summary .articles li.chapter .chapter-title {
+    padding-left: 35px;
+}
+
+.book-summary .summary .articles .articles li.chapter a,
+.book-summary .summary .articles .articles li.chapter .chapter-title {
+    padding-left: 50px;
+}
+
+.book-summary .summary .articles .articles .articles li.chapter a,
+.book-summary .summary .articles .articles .articles li.chapter .chapter-title {
+    padding-left: 65px;
+}
+
+.book-summary .summary .articles .articles .articles .articles li.chapter a,
+.book-summary .summary .articles .articles .articles .articles li.chapter .chapter-title {
+    padding-left: 80px;
+}
+
+.book-summary .summary .articles .articles .articles .articles .articles li.chapter a,
+.book-summary .summary .articles .articles .articles .articles .articles li.chapter .chapter-title {
+    padding-left: 95px;
+}
+
+/* Part titles */
+.book-summary .summary li.part-title {
+    margin-top: 20px;
+    padding: 5px 15px;
+}
+
+.book-summary .summary li.part-title span {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #939da3;
+}
+
+/* Dividers */
+.book-summary .summary li.divider {
+    height: 1px;
+    margin: 10px 15px;
+    background: #e8e8e8;
+}
+
+/* Main content */
+.book-body {
+    margin-left: 300px;
+    flex: 1;
+    min-width: 0;
+}
+
+.body-inner {
+    min-height: 100vh;
+}
+
+.page-wrapper {
+    max-width: 100%;
+}
+
+.page-inner {
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 40px;
+}
+
+/* Markdown content */
+.markdown-section {
+    font-size: 16px;
+    line-height: 1.7;
+}
+
+.markdown-section h1 {
+    font-size: 2em;
+    margin: 0 0 1em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+}
+
+.markdown-section h2 {
+    font-size: 1.5em;
+    margin: 1.5em 0 0.5em;
+    padding-bottom: 0.3em;
+    border-bottom: 1px solid #eee;
+}
+
+.markdown-section h3 {
+    font-size: 1.25em;
+    margin: 1.5em 0 0.5em;
+}
+
+.markdown-section h4, .markdown-section h5, .markdown-section h6 {
+    font-size: 1em;
+    margin: 1.5em 0 0.5em;
+}
+
+.markdown-section p {
+    margin: 0 0 1em;
+}
+
+.markdown-section a {
+    color: #4183c4;
+    text-decoration: none;
+}
+
+.markdown-section a:hover {
+    text-decoration: underline;
+}
+
+.markdown-section code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, Courier, monospace;
+    font-size: 0.9em;
+    background: #f6f8fa;
+    padding: 0.2em 0.4em;
+    border-radius: 3px;
+}
+
+.markdown-section pre {
+    background: #f6f8fa;
+    border-radius: 6px;
+    padding: 16px;
+    overflow-x: auto;
+    margin: 0 0 1em;
+}
+
+.markdown-section pre code {
+    background: none;
+    padding: 0;
+    font-size: 0.85em;
+    line-height: 1.5;
+}
+
+/* Tables */
+.markdown-section table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 0 0 1em;
+    display: block;
+    overflow-x: auto;
+}
+
+.markdown-section table th,
+.markdown-section table td {
+    border: 1px solid #dfe2e5;
+    padding: 8px 12px;
+    text-align: left;
+}
+
+.markdown-section table th {
+    background: #f6f8fa;
+    font-weight: 600;
+}
+
+.markdown-section table tr:nth-child(even) {
+    background: #f8f8f8;
+}
+
+/* Images */
+.markdown-section img {
+    max-width: 100%;
+    height: auto;
+}
+
+/* Lists */
+.markdown-section ul,
+.markdown-section ol {
+    margin: 0 0 1em;
+    padding-left: 2em;
+}
+
+.markdown-section li {
+    margin: 0.25em 0;
+}
+
+/* Blockquotes */
+.markdown-section blockquote {
+    margin: 0 0 1em;
+    padding: 0 1em;
+    color: #6a737d;
+    border-left: 4px solid #dfe2e5;
+}
+
+/* Mermaid diagrams */
+.mermaid {
+    text-align: center;
+    margin: 1em 0;
+}
+
+/* Back to top button */
+.back-to-top {
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 40px;
+    height: 40px;
+    background: #008cff;
+    color: white;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.3s, visibility 0.3s;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+}
+
+.back-to-top.visible {
+    opacity: 1;
+    visibility: visible;
+}
+
+.back-to-top:hover {
+    background: #0070cc;
+}
+
+/* Collapsible chapters */
+.expandable > a::before,
+.expandable > .chapter-title::before {
+    content: "▸";
+    display: inline-block;
+    margin-right: 5px;
+}
+
+.expandable.expanded > a::before,
+.expandable.expanded > .chapter-title::before {
+    transform: rotate(90deg);
+}
+
+.expandable:not(.expanded) > .articles {
+    display: none;
+}
+
+/* Disable all transitions in sidebar to prevent jitter */
+.book-summary * {
+    transition: none !important;
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .book-summary {
+        width: 250px;
+        min-width: 250px;
+    }
+    .book-body {
+        margin-left: 250px;
+    }
+}
+
+@media (max-width: 768px) {
+    .book-summary {
+        transform: translateX(-100%);
+        transition: transform 0.3s;
+    }
+    .book-summary.open {
+        transform: translateX(0);
+    }
+    .book-body {
+        margin-left: 0;
+    }
+    .page-inner {
+        padding: 20px;
+    }
+}
+
+/* Sidebar toggle button */
+.sidebar-toggle {
+    position: fixed;
+    top: 10px;
+    left: 310px;
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 101;
+    transition: left 0.3s, transform 0.3s;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.sidebar-toggle:hover {
+    background: #f5f5f5;
+}
+
+.sidebar-toggle svg {
+    color: #666;
+}
+
+/* Sidebar hidden state */
+.book.sidebar-hidden .book-summary {
+    transform: translateX(-100%);
+}
+
+.book.sidebar-hidden .book-body {
+    margin-left: 0;
+}
+
+.book.sidebar-hidden .sidebar-toggle {
+    left: 10px;
+}
+
+/* Smooth transitions - only when toggling sidebar */
+.book.sidebar-toggling .book-summary {
+    transition: transform 0.3s ease;
+}
+
+.book.sidebar-toggling .book-body {
+    transition: margin-left 0.3s ease;
+}
+
+@media (max-width: 1024px) {
+    .sidebar-toggle {
+        left: 260px;
+    }
+    .book.sidebar-hidden .sidebar-toggle {
+        left: 10px;
+    }
+}
