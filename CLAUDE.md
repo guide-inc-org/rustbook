@@ -89,4 +89,5 @@ Consumers download pre-built binary:
 
 ## Changelog
 
+- **2025-12-25 v0.1.12:** Fix SPA navigation URL accumulation bug
 - **2025-12-25 v0.1.10:** Fix image paths (remove `<base>` tag), add release workflow

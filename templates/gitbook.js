@@ -343,8 +343,8 @@
                     }
                 }, 50);
 
-                // Update URL
-                history.pushState(null, '', url);
+                // Update URL (use absolute URL to avoid relative path issues with SPA navigation)
+                history.pushState(null, '', absoluteUrl);
 
                 // Scroll to hash anchor or top
                 if (hash) {

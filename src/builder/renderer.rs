@@ -497,20 +497,30 @@ fn convert_remaining_markdown_images(html: &str) -> String {
     result
 }
 
-/// Convert relative links (../ or ./) to absolute paths from root
-/// Also convert anchor-only links (#id) to include current page path
+/// Convert internal links to proper relative paths from current file
+/// Links like "Customer/AssetStatus/PortfolioStock.html" (relative from book root)
+/// need to be converted to "../../Customer/AssetStatus/PortfolioStock.html"
+/// when rendered from a file at "Customer/AssetStatus/PortfolioTop.html"
 /// current_path: e.g., "Customer/AssetStatus/PortfolioTop.md"
 fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String {
     let result = html.to_string();
 
-    // Get the directory of the current file
-    let current_dir = Path::new(current_path)
+    // Calculate the depth (number of directories from root)
+    // e.g., "Customer/AssetStatus/PortfolioTop.md" -> depth 2
+    let depth = Path::new(current_path)
         .parent()
-        .map(|p| p.to_string_lossy().to_string())
-        .unwrap_or_default();
+        .map(|p| {
+            let dir = p.to_string_lossy();
+            if dir.is_empty() {
+                0
+            } else {
+                dir.matches('/').count() + 1
+            }
+        })
+        .unwrap_or(0);
 
-    // Get the HTML path for the current file (for anchor links)
-    let current_html_path = current_path.replace(".md", ".html");
+    // Create the prefix to go back to root (e.g., "../../" for depth 2)
+    let root_prefix: String = "../".repeat(depth);
 
     // Find and replace href="..." patterns
     let mut new_result = String::new();
@@ -529,23 +539,25 @@ fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String 
             let url_end = url_start + url_end_offset;
             let url = &result[url_start..url_end];
 
-            // Check if it's an anchor-only link (#id)
-            if url.starts_with('#') {
-                // Convert #anchor to current_page.html#anchor
-                new_result.push_str(&result[last_end..url_start]);
-                new_result.push_str(&current_html_path);
-                new_result.push_str(url);
-                last_end = url_end;
-            }
-            // Check if it's a relative path (starts with ../ or ./)
-            else if url.starts_with("../") || url.starts_with("./") {
+            // Check if this is an internal link that needs conversion
+            // Skip: external links (http/https), anchor-only (#), already relative (../ or ./), absolute (/)
+            let needs_conversion = !url.is_empty()
+                && !url.starts_with("http://")
+                && !url.starts_with("https://")
+                && !url.starts_with('#')
+                && !url.starts_with("../")
+                && !url.starts_with("./")
+                && !url.starts_with('/')
+                && !url.starts_with("mailto:")
+                && !url.starts_with("javascript:")
+                && depth > 0;
+
+            if needs_conversion {
                 // Copy everything up to the URL
                 new_result.push_str(&result[last_end..url_start]);
-
-                // Resolve the relative path
-                let resolved = resolve_relative_path(&current_dir, url);
-                new_result.push_str(&resolved);
-
+                // Add the root prefix + original URL
+                new_result.push_str(&root_prefix);
+                new_result.push_str(url);
                 last_end = url_end;
             }
 
@@ -561,38 +573,6 @@ fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String 
     new_result
 }
 
-/// Resolve a relative path against a base directory
-/// base_dir: e.g., "Customer/AssetStatus"
-/// relative_path: e.g., "../Common/LocalStorage.html"
-/// Returns: e.g., "Customer/Common/LocalStorage.html"
-fn resolve_relative_path(base_dir: &str, relative_path: &str) -> String {
-    let mut components: Vec<&str> = if base_dir.is_empty() {
-        Vec::new()
-    } else {
-        base_dir.split('/').collect()
-    };
-
-    // Split path and anchor
-    let (path_part, anchor) = if let Some(hash_pos) = relative_path.find('#') {
-        (&relative_path[..hash_pos], &relative_path[hash_pos..])
-    } else {
-        (relative_path, "")
-    };
-
-    for part in path_part.split('/') {
-        match part {
-            ".." => {
-                components.pop();
-            }
-            "." | "" => {}
-            _ => {
-                components.push(part);
-            }
-        }
-    }
-
-    format!("{}{}", components.join("/"), anchor)
-}
 
 #[cfg(test)]
 mod tests {
