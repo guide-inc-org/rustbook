@@ -1,6 +1,60 @@
 use pulldown_cmark::{html, Event, Options, Parser, Tag, TagEnd, CodeBlockKind, HeadingLevel};
 use std::path::Path;
 
+/// Table of Contents item
+#[derive(Debug, Clone)]
+pub struct TocItem {
+    pub level: u8,
+    pub text: String,
+    pub id: String,
+}
+
+/// Extract headings from markdown content for TOC generation
+pub fn extract_headings(content: &str) -> Vec<TocItem> {
+    let content = fix_fullwidth_heading_spaces(content);
+
+    let mut options = Options::empty();
+    options.insert(Options::ENABLE_TABLES);
+    options.insert(Options::ENABLE_FOOTNOTES);
+    options.insert(Options::ENABLE_STRIKETHROUGH);
+    options.insert(Options::ENABLE_TASKLISTS);
+    options.insert(Options::ENABLE_HEADING_ATTRIBUTES);
+
+    let parser = Parser::new_ext(&content, options);
+
+    let mut headings = Vec::new();
+    let mut in_heading: Option<HeadingLevel> = None;
+    let mut heading_text = String::new();
+
+    for event in parser {
+        match &event {
+            Event::Start(Tag::Heading { level, .. }) => {
+                in_heading = Some(*level);
+                heading_text.clear();
+            }
+            Event::Text(text) if in_heading.is_some() => {
+                heading_text.push_str(text);
+            }
+            Event::End(TagEnd::Heading(level)) if in_heading.is_some() => {
+                let level_num = heading_level_to_num(*level);
+                // Only include h2, h3, h4 in TOC (skip h1 which is page title)
+                if level_num >= 2 && level_num <= 4 {
+                    let id = slugify(&heading_text);
+                    headings.push(TocItem {
+                        level: level_num,
+                        text: heading_text.clone(),
+                        id,
+                    });
+                }
+                in_heading = None;
+            }
+            _ => {}
+        }
+    }
+
+    headings
+}
+
 /// Render markdown content to HTML with Mermaid support
 /// current_path: the path of the current markdown file (e.g., "Customer/AssetStatus/PortfolioTop.md")
 pub fn render_markdown_with_path(content: &str, current_path: Option<&str>) -> String {

@@ -40,6 +40,92 @@ body {
     padding: 20px 0;
 }
 
+/* Search */
+.search-wrapper {
+    padding: 15px;
+    border-bottom: 1px solid #e8e8e8;
+    position: relative;
+}
+
+.search-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    font-size: 14px;
+    outline: none;
+    transition: border-color 0.2s;
+}
+
+.search-input:focus {
+    border-color: #008cff;
+}
+
+.search-input::placeholder {
+    color: #999;
+}
+
+.search-results {
+    position: absolute;
+    top: 100%;
+    left: 15px;
+    right: 15px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    max-height: 400px;
+    overflow-y: auto;
+    z-index: 200;
+    display: none;
+}
+
+.search-results.visible {
+    display: block;
+}
+
+.search-result-item {
+    display: block;
+    padding: 10px 12px;
+    border-bottom: 1px solid #f0f0f0;
+    text-decoration: none;
+    color: #333;
+    transition: background 0.2s;
+}
+
+.search-result-item:last-child {
+    border-bottom: none;
+}
+
+.search-result-item:hover {
+    background: #f5f5f5;
+}
+
+.search-result-title {
+    font-weight: 600;
+    font-size: 14px;
+    margin-bottom: 4px;
+}
+
+.search-result-snippet {
+    font-size: 12px;
+    color: #666;
+    line-height: 1.4;
+}
+
+.search-result-item mark {
+    background: #fff3cd;
+    padding: 0 2px;
+    border-radius: 2px;
+}
+
+.search-no-results {
+    padding: 20px;
+    text-align: center;
+    color: #666;
+    font-size: 14px;
+}
+
 .book-summary .summary {
     list-style: none;
     margin: 0;
@@ -341,6 +427,18 @@ body.loading .markdown-section {
     margin: 1em 0;
 }
 
+/* WSD (js-sequence-diagrams) */
+.wsd {
+    text-align: center;
+    margin: 1em 0;
+    overflow-x: auto;
+}
+
+.wsd svg {
+    max-width: 100%;
+    height: auto;
+}
+
 /* Back to top button */
 .back-to-top {
     position: fixed;
@@ -492,5 +590,133 @@ body.loading .markdown-section {
         bottom: 0;
         background: rgba(0, 0, 0, 0.3);
         z-index: 99;
+    }
+}
+
+/* Page Table of Contents (Right sidebar) */
+.page-toc {
+    position: fixed;
+    right: 20px;
+    top: 80px;
+    width: 220px;
+    max-height: calc(100vh - 120px);
+    overflow-y: auto;
+    background: #fff;
+    border-left: 1px solid #e8e8e8;
+    padding: 15px;
+    z-index: 50;
+    transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.page-toc .toc-header {
+    font-size: 12px;
+    font-weight: 700;
+    text-transform: uppercase;
+    color: #939da3;
+    margin-bottom: 10px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #e8e8e8;
+}
+
+.page-toc .toc-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.page-toc .toc-list li {
+    margin: 0;
+    line-height: 1.4;
+}
+
+.page-toc .toc-list li a {
+    display: block;
+    padding: 4px 0;
+    color: #666;
+    text-decoration: none;
+    font-size: 13px;
+    transition: color 0.2s;
+}
+
+.page-toc .toc-list li a:hover {
+    color: #008cff;
+}
+
+.page-toc .toc-list li.active a {
+    color: #008cff;
+    font-weight: 600;
+}
+
+/* TOC indentation levels */
+.page-toc .toc-h2 {
+    padding-left: 0;
+}
+
+.page-toc .toc-h3 {
+    padding-left: 12px;
+}
+
+.page-toc .toc-h4 {
+    padding-left: 24px;
+}
+
+/* TOC toggle button */
+.toc-toggle {
+    position: fixed;
+    top: 10px;
+    right: 250px;
+    width: 36px;
+    height: 36px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 101;
+    transition: right 0.3s ease;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.toc-toggle:hover {
+    background: #f5f5f5;
+}
+
+.toc-toggle svg {
+    color: #666;
+}
+
+/* TOC hidden state */
+.book.toc-hidden .page-toc {
+    transform: translateX(100%);
+    opacity: 0;
+    pointer-events: none;
+}
+
+.book.toc-hidden .toc-toggle {
+    right: 10px;
+}
+
+/* Adjust content when TOC is visible */
+.book:not(.toc-hidden) .page-nav.next {
+    right: 260px;
+}
+
+/* Hide TOC on mobile */
+@media (max-width: 768px) {
+    .page-toc,
+    .toc-toggle {
+        display: none !important;
+    }
+    .book:not(.toc-hidden) .page-nav.next {
+        right: 10px;
+    }
+}
+
+/* Adjust TOC position when sidebar is hidden */
+@media (min-width: 769px) {
+    .book.sidebar-hidden .page-wrapper {
+        max-width: calc(100% - 260px);
     }
 }

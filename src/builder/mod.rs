@@ -3,12 +3,21 @@ mod template;
 
 use crate::parser::{self, BookConfig, Language, Summary, SummaryItem};
 use anyhow::{Context, Result};
+use serde::Serialize;
 use std::fs;
 use std::path::Path;
 use std::time::Instant;
 
-pub use renderer::{render_markdown, render_markdown_with_path};
+pub use renderer::{render_markdown, render_markdown_with_path, extract_headings, TocItem};
 pub use template::Templates;
+
+/// Search index entry
+#[derive(Serialize)]
+struct SearchEntry {
+    title: String,
+    path: String,
+    content: String,
+}
 
 /// Build statistics
 #[derive(Default)]
@@ -21,9 +30,15 @@ struct BuildStats {
 const GITBOOK_CSS: &str = include_str!("../../templates/gitbook.css");
 const GITBOOK_JS: &str = include_str!("../../templates/gitbook.js");
 const COLLAPSIBLE_JS: &str = include_str!("../../templates/collapsible.js");
+const SEARCH_JS: &str = include_str!("../../templates/search.js");
 
 /// Build the book from source directory to output directory
 pub fn build(source: &Path, output: &Path) -> Result<()> {
+    build_with_options(source, output, false)
+}
+
+/// Build the book with options (skip_search_index for hot reload)
+pub fn build_with_options(source: &Path, output: &Path, skip_search_index: bool) -> Result<()> {
     let start_time = Instant::now();
     let source = source.canonicalize().context("Source directory not found")?;
 
@@ -37,7 +52,7 @@ pub fn build(source: &Path, output: &Path) -> Result<()> {
     let stats = if languages.is_empty() {
         // Single language book
         println!("Building single-language book...");
-        build_single_book(&source, output, &config)?
+        build_single_book(&source, output, &config, skip_search_index)?
     } else {
         // Multi-language book
         println!("Building multi-language book with {} languages:", languages.len());
@@ -45,7 +60,7 @@ pub fn build(source: &Path, output: &Path) -> Result<()> {
             println!("  - {} ({})", lang.title, lang.code);
         }
 
-        build_multi_lang_book(&source, output, &config, &languages)?
+        build_multi_lang_book(&source, output, &config, &languages, skip_search_index)?
     };
 
     let elapsed = start_time.elapsed();
@@ -58,7 +73,7 @@ pub fn build(source: &Path, output: &Path) -> Result<()> {
     Ok(())
 }
 
-fn build_single_book(source: &Path, output: &Path, config: &BookConfig) -> Result<BuildStats> {
+fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_search_index: bool) -> Result<BuildStats> {
     let summary = Summary::parse(source)?;
     let templates = Templates::new(config)?;
     let mut stats = BuildStats::default();
@@ -90,6 +105,7 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig) -> Resul
     if readme_path.exists() {
         let content = fs::read_to_string(&readme_path)?;
         let html_content = render_markdown(&content);
+        let toc_items = extract_headings(&content);
         let page_html = templates.render_page(
             &config.title,
             &html_content,
@@ -97,9 +113,15 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig) -> Resul
             config,
             &summary,
             Some("index.html"),
+            &toc_items,
         )?;
         fs::write(output.join("index.html"), page_html)?;
         stats.pages += 1;
+    }
+
+    // Generate search index (skip on hot reload for performance)
+    if !skip_search_index {
+        generate_search_index(source, output, &summary)?;
     }
 
     Ok(stats)
@@ -120,6 +142,9 @@ fn write_static_assets(output: &Path, config: &BookConfig) -> Result<()> {
         fs::write(gitbook_dir.join("collapsible.js"), COLLAPSIBLE_JS)?;
     }
 
+    // Write search JS
+    fs::write(gitbook_dir.join("search.js"), SEARCH_JS)?;
+
     Ok(())
 }
 
@@ -128,6 +153,7 @@ fn build_multi_lang_book(
     output: &Path,
     config: &BookConfig,
     languages: &[Language],
+    skip_search_index: bool,
 ) -> Result<BuildStats> {
     let mut stats = BuildStats::default();
 
@@ -151,7 +177,7 @@ fn build_multi_lang_book(
             config.clone()
         };
 
-        let lang_stats = build_single_book(&lang_source, &lang_output, &lang_config)?;
+        let lang_stats = build_single_book(&lang_source, &lang_output, &lang_config, skip_search_index)?;
         stats.pages += lang_stats.pages;
         stats.assets += lang_stats.assets;
     }
@@ -183,6 +209,7 @@ fn build_chapters(
                     // Read and render markdown
                     let content = fs::read_to_string(&src_file)?;
                     let html_content = render_markdown_with_path(&content, Some(md_path));
+                    let toc_items = extract_headings(&content);
 
                     // Generate output path
                     let html_path = md_path.replace(".md", ".html");
@@ -204,6 +231,7 @@ fn build_chapters(
                         config,
                         summary,
                         Some(&html_path),
+                        &toc_items,
                     )?;
 
                     // Write output
@@ -320,6 +348,87 @@ fn generate_lang_index(output: &Path, languages: &[Language], config: &BookConfi
 
     // Copy gitbook static files to root for the language selector page
     copy_gitbook_static_to_root(output)?;
+
+    Ok(())
+}
+
+/// Strip HTML tags from content for search indexing
+fn strip_html_tags(html: &str) -> String {
+    let mut result = String::new();
+    let mut in_tag = false;
+
+    for c in html.chars() {
+        if c == '<' {
+            in_tag = true;
+        } else if c == '>' {
+            in_tag = false;
+        } else if !in_tag {
+            result.push(c);
+        }
+    }
+
+    // Clean up whitespace
+    result
+        .split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Collect search entries from summary items
+fn collect_search_entries(
+    source: &Path,
+    items: &[SummaryItem],
+    entries: &mut Vec<SearchEntry>,
+) -> Result<()> {
+    for item in items {
+        if let SummaryItem::Link { title, path, children } = item {
+            if let Some(md_path) = path {
+                let src_file = source.join(md_path);
+                if src_file.exists() {
+                    let content = fs::read_to_string(&src_file)?;
+                    let html_content = render_markdown(&content);
+                    let text_content = strip_html_tags(&html_content);
+                    let html_path = md_path.replace(".md", ".html");
+
+                    entries.push(SearchEntry {
+                        title: title.clone(),
+                        path: html_path,
+                        content: text_content,
+                    });
+                }
+            }
+            if !children.is_empty() {
+                collect_search_entries(source, children, entries)?;
+            }
+        }
+    }
+    Ok(())
+}
+
+/// Generate search index JSON file
+fn generate_search_index(source: &Path, output: &Path, summary: &Summary) -> Result<()> {
+    let mut entries = Vec::new();
+
+    // Collect from README.md
+    let readme_path = source.join("README.md");
+    if readme_path.exists() {
+        let content = fs::read_to_string(&readme_path)?;
+        let html_content = render_markdown(&content);
+        let text_content = strip_html_tags(&html_content);
+
+        entries.push(SearchEntry {
+            title: "Home".to_string(),
+            path: "index.html".to_string(),
+            content: text_content,
+        });
+    }
+
+    // Collect from all chapters
+    collect_search_entries(source, &summary.items, &mut entries)?;
+
+    // Write search index
+    let json = serde_json::to_string(&entries)?;
+    fs::write(output.join("search_index.json"), json)?;
 
     Ok(())
 }

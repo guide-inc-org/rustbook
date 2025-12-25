@@ -1,4 +1,5 @@
 use crate::parser::{BookConfig, Summary, SummaryItem};
+use crate::builder::TocItem;
 use anyhow::Result;
 use tera::{Context, Tera};
 
@@ -24,6 +25,7 @@ impl Templates {
         config: &BookConfig,
         summary: &Summary,
         current_path: Option<&str>,
+        toc_items: &[TocItem],
     ) -> Result<String> {
         let mut context = Context::new();
 
@@ -47,6 +49,11 @@ impl Templates {
         context.insert("back_to_top", &config.is_plugin_enabled("back-to-top-button"));
         context.insert("collapsible", &config.is_plugin_enabled("collapsible-chapters"));
         context.insert("mermaid", &config.is_plugin_enabled("mermaid-md-adoc"));
+
+        // Generate TOC HTML
+        let toc_html = generate_toc_html(toc_items);
+        context.insert("toc", &toc_html);
+        context.insert("has_toc", &!toc_items.is_empty());
 
         // Custom styles
         let has_custom_style = config.get_website_style().is_some();
@@ -190,6 +197,33 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Generate TOC HTML from heading items
+fn generate_toc_html(items: &[TocItem]) -> String {
+    if items.is_empty() {
+        return String::new();
+    }
+
+    let mut html = String::from("<ul class=\"toc-list\">");
+
+    for item in items {
+        let indent_class = match item.level {
+            2 => "toc-h2",
+            3 => "toc-h3",
+            4 => "toc-h4",
+            _ => "toc-h2",
+        };
+        html.push_str(&format!(
+            "<li class=\"{}\"><a href=\"#{}\">{}</a></li>",
+            indent_class,
+            html_escape(&item.id),
+            html_escape(&item.text)
+        ));
+    }
+
+    html.push_str("</ul>");
+    html
+}
+
 const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
 <html lang="ja">
 <head>
@@ -208,6 +242,10 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
 </head>
 <body class="book font-family-1">
     <div class="book-summary">
+        <div class="search-wrapper">
+            <input type="text" class="search-input" placeholder="Search..." aria-label="Search">
+            <div class="search-results"></div>
+        </div>
         <nav role="navigation">
             <ul class="summary">
                 {{ sidebar | safe }}
@@ -223,6 +261,20 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
         </div>
+        {% if has_toc %}
+        <div class="toc-toggle" title="Toggle Table of Contents">
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="3" y1="6" x2="15" y2="6"></line>
+                <line x1="3" y1="12" x2="21" y2="12"></line>
+                <line x1="3" y1="18" x2="18" y2="18"></line>
+                <polyline points="17 4 21 6 17 8"></polyline>
+            </svg>
+        </div>
+        <nav class="page-toc">
+            <div class="toc-header">On This Page</div>
+            {{ toc | safe }}
+        </nav>
+        {% endif %}
         <div class="body-inner">
             {% if prev_url %}
             <a class="page-nav prev" href="{{ prev_url | safe }}" title="{{ prev_title }}">
@@ -260,6 +312,7 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     {% if collapsible %}
     <script src="gitbook/collapsible.js"></script>
     {% endif %}
+    <script src="gitbook/search.js"></script>
 </body>
 </html>
 "##;

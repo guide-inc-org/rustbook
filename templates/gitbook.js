@@ -3,6 +3,121 @@
 (function() {
     'use strict';
 
+    // TOC toggle functionality
+    var tocToggle = document.querySelector('.toc-toggle');
+    var book = document.querySelector('.book');
+    var pageToc = document.querySelector('.page-toc');
+
+    function isMobileToc() {
+        return window.innerWidth <= 768;
+    }
+
+    if (tocToggle && book && pageToc) {
+        // Restore TOC state from localStorage (desktop only)
+        if (!isMobileToc()) {
+            var tocHidden = localStorage.getItem('guidebook-toc-hidden') === 'true';
+            if (tocHidden) {
+                book.classList.add('toc-hidden');
+            }
+        }
+
+        tocToggle.addEventListener('click', function() {
+            if (!isMobileToc()) {
+                book.classList.toggle('toc-hidden');
+                var isHidden = book.classList.contains('toc-hidden');
+                localStorage.setItem('guidebook-toc-hidden', isHidden);
+            }
+        });
+
+        // Handle resize
+        window.addEventListener('resize', function() {
+            if (isMobileToc()) {
+                // On mobile, TOC is always hidden via CSS
+            } else {
+                // On desktop, restore saved state
+                var tocHidden = localStorage.getItem('guidebook-toc-hidden') === 'true';
+                if (tocHidden) {
+                    book.classList.add('toc-hidden');
+                } else {
+                    book.classList.remove('toc-hidden');
+                }
+            }
+        });
+    }
+
+    // TOC scroll spy - highlight current section
+    function setupTocScrollSpy() {
+        var tocLinks = document.querySelectorAll('.page-toc .toc-list a');
+        if (tocLinks.length === 0) return;
+
+        var headings = [];
+        tocLinks.forEach(function(link) {
+            var href = link.getAttribute('href');
+            if (href && href.startsWith('#')) {
+                var id = href.substring(1);
+                try {
+                    id = decodeURIComponent(id);
+                } catch (e) {}
+                var heading = document.getElementById(id);
+                if (heading) {
+                    headings.push({ element: heading, link: link });
+                }
+            }
+        });
+
+        if (headings.length === 0) return;
+
+        function updateActiveLink() {
+            var scrollTop = window.scrollY + 100; // Offset for fixed header
+            var activeIndex = 0;
+
+            for (var i = 0; i < headings.length; i++) {
+                if (headings[i].element.offsetTop <= scrollTop) {
+                    activeIndex = i;
+                }
+            }
+
+            tocLinks.forEach(function(link) {
+                link.parentElement.classList.remove('active');
+            });
+            headings[activeIndex].link.parentElement.classList.add('active');
+        }
+
+        window.addEventListener('scroll', updateActiveLink);
+        updateActiveLink(); // Initial call
+    }
+
+    setupTocScrollSpy();
+
+    // TOC link click handler - prevent base href issue
+    function setupTocLinks() {
+        var pageToc = document.querySelector('.page-toc');
+        if (!pageToc) return;
+
+        pageToc.addEventListener('click', function(e) {
+            var link = e.target.closest('a');
+            if (!link) return;
+
+            var href = link.getAttribute('href');
+            if (!href || !href.startsWith('#')) return;
+
+            e.preventDefault();
+
+            var id = href.substring(1);
+            try {
+                id = decodeURIComponent(id);
+            } catch (ex) {}
+
+            var target = document.getElementById(id);
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth' });
+                history.pushState(null, '', href);
+            }
+        });
+    }
+
+    setupTocLinks();
+
     // Back to top button
     var backToTop = document.querySelector('.back-to-top');
     if (backToTop) {
@@ -253,6 +368,38 @@
                 // Re-init mermaid if present
                 if (typeof mermaid !== 'undefined') {
                     mermaid.init(undefined, '.markdown-section .mermaid');
+                }
+
+                // Update TOC from new page
+                var newToc = doc.querySelector('.page-toc');
+                var currentToc = document.querySelector('.page-toc');
+                var newTocToggle = doc.querySelector('.toc-toggle');
+                var currentTocToggle = document.querySelector('.toc-toggle');
+
+                if (currentToc) currentToc.remove();
+                if (currentTocToggle) currentTocToggle.remove();
+
+                if (newToc) {
+                    var bookBody = document.querySelector('.book-body');
+                    if (bookBody) {
+                        var tocClone = newToc.cloneNode(true);
+                        bookBody.insertBefore(tocClone, bookBody.querySelector('.body-inner'));
+                        if (newTocToggle) {
+                            var toggleClone = newTocToggle.cloneNode(true);
+                            bookBody.insertBefore(toggleClone, tocClone);
+                            // Re-setup toggle handler
+                            toggleClone.addEventListener('click', function() {
+                                if (window.innerWidth > 768) {
+                                    document.querySelector('.book').classList.toggle('toc-hidden');
+                                    var isHidden = document.querySelector('.book').classList.contains('toc-hidden');
+                                    localStorage.setItem('guidebook-toc-hidden', isHidden);
+                                }
+                            });
+                        }
+                        // Re-setup scroll spy and TOC links
+                        setupTocScrollSpy();
+                        setupTocLinks();
+                    }
                 }
 
                 // Update prev/next navigation buttons

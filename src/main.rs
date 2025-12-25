@@ -109,7 +109,8 @@ fn serve_book(source: &PathBuf, port: u16) -> Result<()> {
                 });
                 if dominated {
                     println!("\n🔄 File changed, rebuilding...");
-                    if let Err(e) = builder::build(&source_for_watcher, &temp_dir_for_watcher) {
+                    // Skip search index generation on hot reload for performance
+                    if let Err(e) = builder::build_with_options(&source_for_watcher, &temp_dir_for_watcher, true) {
                         eprintln!("   Build error: {}", e);
                     } else {
                         version_for_watcher.fetch_add(1, Ordering::SeqCst);
