@@ -122,7 +122,7 @@
 
         clearTimeout(debounceTimer);
 
-        if (query.length < 2) {
+        if (query.length < 1) {
             searchResults.classList.remove('visible');
             return;
         }
@@ -137,7 +137,7 @@
     });
 
     searchInput.addEventListener('focus', function() {
-        if (this.value.trim().length >= 2) {
+        if (this.value.trim().length >= 1) {
             searchResults.classList.add('visible');
         }
     });
