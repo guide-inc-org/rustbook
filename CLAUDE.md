@@ -1,87 +1,85 @@
 # CLAUDE.md - guidebook
 
-HonKit/GitBook互換の静的サイトジェネレーター
+A static site generator compatible with HonKit/GitBook.
 
-## プロジェクト概要
+## Project Overview
 
-- **言語:** Rust
-- **公開先:** crates.io (`cargo install guidebook`)
-- **リポジトリ:** https://github.com/guide-inc-org/guidebook
+- **Language:** Rust
+- **Published to:** crates.io (`cargo install guidebook`)
+- **Repository:** https://github.com/guide-inc-org/guidebook
 
-## ビルド & テスト
+## Build & Test
 
 ```bash
-# ビルド
+# Build
 cargo build --release
 
-# テスト
+# Test
 cargo test
 
-# ローカルでドキュメントをビルド
+# Build documentation locally
 ./target/release/guidebook build
 
-# 開発サーバー起動
+# Start dev server
 ./target/release/guidebook serve
 ```
 
-## リリース手順
+## Release Procedure
 
-1. `Cargo.toml` のバージョンを更新
-2. コミット & プッシュ
-3. タグを作成してプッシュ（GitHub Releasesにバイナリが自動生成される）
-4. crates.io に公開
+1. Update version in `Cargo.toml`
+2. Commit & push
+3. Create and push tag (binary is auto-generated to GitHub Releases)
+4. Publish to crates.io
 
 ```bash
-# バージョン更新後
+# After version update
 git add -A && git commit -m "Bump version to vX.Y.Z"
 git push origin main
 
-# タグ作成 & プッシュ（リリースワークフローがトリガーされる）
+# Create & push tag (triggers release workflow)
 git tag vX.Y.Z
 git push origin vX.Y.Z
 
-# crates.io に公開
+# Publish to crates.io
 cargo publish
 ```
 
-## ディレクトリ構造
+## Directory Structure
 
 ```
 src/
-├── main.rs          # CLI エントリーポイント
+├── main.rs          # CLI entry point
 ├── builder/
-│   ├── mod.rs       # ビルド処理
-│   ├── renderer.rs  # Markdown → HTML 変換
-│   └── template.rs  # HTMLテンプレート
+│   ├── mod.rs       # Build process
+│   ├── renderer.rs  # Markdown to HTML conversion
+│   └── template.rs  # HTML template
 ├── parser/
 │   ├── mod.rs
-│   ├── book_config.rs  # book.json パーサー
-│   ├── langs.rs        # LANGS.md パーサー（多言語対応）
-│   └── summary.rs      # SUMMARY.md パーサー
+│   ├── book_config.rs  # book.json parser
+│   ├── langs.rs        # LANGS.md parser (multi-language support)
+│   └── summary.rs      # SUMMARY.md parser
 templates/
-├── gitbook.css      # スタイルシート
-├── gitbook.js       # クライアントJS
-├── collapsible.js   # 折りたたみ機能
-└── search.js        # 検索機能
+├── gitbook.css      # Stylesheet
+├── gitbook.js       # Client-side JS
+├── collapsible.js   # Collapsible sections
+└── search.js        # Search functionality
 ```
 
-## 重要な設計判断
+## Important Design Decisions
 
-### `<base>` タグは使用しない
+### Do NOT use `<base>` tag
 
-**理由:** `<base href>` を使うと、マークダウン内の相対画像パス（例: `../../../assets/...`）がbase基準で解決され、サブディレクトリにデプロイした際に壊れる。
+**Reason:** Using `<base href>` causes relative image paths in markdown (e.g., `../../../assets/...`) to resolve from base, breaking when deployed to subdirectories.
 
-**対応:** CSS/JS/リンクには `root_path` を直接埋め込む（HonKitと同じ方式）
-
-参照: `docs/2025-12-25-image-path-fix-and-build-optimization.md`
+**Solution:** Embed `root_path` directly into CSS/JS/links (same approach as HonKit)
 
 ## CI/CD
 
-### リリースワークフロー
+### Release Workflow
 
-`.github/workflows/release.yml` - タグプッシュ時にLinuxバイナリをGitHub Releasesに公開
+`.github/workflows/release.yml` - Publishes Linux binary to GitHub Releases on tag push.
 
-利用側はpre-builtバイナリをダウンロードして使用:
+Consumers download pre-built binary:
 ```yaml
 - name: Install guidebook
   run: |
@@ -89,11 +87,6 @@ templates/
     ./guidebook build
 ```
 
-## 主な利用プロジェクト
+## Changelog
 
-- kcmsr-member-site-spec (`develop-guidebook` ブランチ)
-  - デプロイ先: https://gitbook.guide.inc/kcmsr-guidebook/
-
-## 対応履歴
-
-- **2025-12-25 v0.1.10:** 画像パス修正（`<base>`タグ削除）、リリースワークフロー追加
+- **2025-12-25 v0.1.10:** Fix image paths (remove `<base>` tag), add release workflow
