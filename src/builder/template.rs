@@ -34,8 +34,8 @@ impl Templates {
         context.insert("content", content);
         context.insert("root_path", root_path);
 
-        // Generate sidebar HTML - links are relative to base href
-        let sidebar = generate_sidebar(&summary.items, current_path, "");
+        // Generate sidebar HTML - links need root_path prefix
+        let sidebar = generate_sidebar(&summary.items, current_path, root_path);
         context.insert("sidebar", &sidebar);
 
         // Generate prev/next navigation
@@ -229,11 +229,10 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <base href="{{ root_path }}">
     <title>{{ title }} | {{ book_title }}</title>
-    <link rel="stylesheet" href="gitbook/gitbook.css">
+    <link rel="stylesheet" href="{{ root_path }}gitbook/gitbook.css">
     {% if has_custom_style %}
-    <link rel="stylesheet" href="gitbook/style.css">
+    <link rel="stylesheet" href="{{ root_path }}gitbook/style.css">
     {% endif %}
     {% if mermaid %}
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
@@ -277,14 +276,14 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
         {% endif %}
         <div class="body-inner">
             {% if prev_url %}
-            <a class="page-nav prev" href="{{ prev_url | safe }}" title="{{ prev_title }}">
+            <a class="page-nav prev" href="{{ root_path }}{{ prev_url | safe }}" title="{{ prev_title }}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="15 18 9 12 15 6"></polyline>
                 </svg>
             </a>
             {% endif %}
             {% if next_url %}
-            <a class="page-nav next" href="{{ next_url | safe }}" title="{{ next_title }}">
+            <a class="page-nav next" href="{{ root_path }}{{ next_url | safe }}" title="{{ next_title }}">
                 <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <polyline points="9 18 15 12 9 6"></polyline>
                 </svg>
@@ -308,11 +307,11 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     </a>
     {% endif %}
 
-    <script src="gitbook/gitbook.js"></script>
+    <script src="{{ root_path }}gitbook/gitbook.js"></script>
     {% if collapsible %}
-    <script src="gitbook/collapsible.js"></script>
+    <script src="{{ root_path }}gitbook/collapsible.js"></script>
     {% endif %}
-    <script src="gitbook/search.js"></script>
+    <script src="{{ root_path }}gitbook/search.js"></script>
 </body>
 </html>
 "##;
