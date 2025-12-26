@@ -243,7 +243,7 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     <script>mermaid.initialize({startOnLoad:true});</script>
     {% endif %}
 </head>
-<body class="book font-family-1">
+<body class="book font-family-1" data-root-path="{{ root_path }}">
     <div class="book-summary">
         <div class="search-wrapper">
             <input type="text" class="search-input" placeholder="Search..." aria-label="Search">

@@ -14,8 +14,8 @@
     function loadSearchIndex() {
         if (searchIndex) return Promise.resolve(searchIndex);
 
-        var baseUrl = document.querySelector('base');
-        var indexUrl = baseUrl ? baseUrl.href + 'search_index.json' : 'search_index.json';
+        var rootPath = document.body.getAttribute('data-root-path') || '';
+        var indexUrl = rootPath + 'search_index.json';
 
         return fetch(indexUrl)
             .then(function(response) {
