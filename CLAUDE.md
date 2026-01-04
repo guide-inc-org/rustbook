@@ -83,15 +83,55 @@ templates/
 
 ### Release Workflow
 
-`.github/workflows/release.yml` - Publishes Linux binary to GitHub Releases on tag push.
+`.github/workflows/release.yml` - Publishes multi-platform binaries to GitHub Releases on tag push.
 
-Consumers download pre-built binary:
+**Supported platforms:**
+- Linux x86_64
+- macOS x86_64 (Intel)
+- macOS arm64 (Apple Silicon)
+- Windows x86_64
+
+**Installation (no Rust required):**
+```bash
+# macOS / Linux
+curl -fsSL https://raw.githubusercontent.com/guide-inc-org/guidebook/main/install.sh | sh
+
+# Windows (PowerShell)
+irm https://raw.githubusercontent.com/guide-inc-org/guidebook/main/install.ps1 | iex
+
+# Update to latest version
+guidebook update
+```
+
+**CI pipeline usage:**
 ```yaml
 - name: Install guidebook
   run: |
     curl -sL https://github.com/guide-inc-org/guidebook/releases/latest/download/guidebook-linux-x86_64.tar.gz | tar xz
     ./guidebook build
 ```
+
+## TODO
+
+- [ ] Update README.md
+  - Add quick install instructions (curl | sh)
+  - Add `guidebook update` command documentation
+  - Simplify structure (refer to HonKit's README)
+- [ ] Create `docs/` folder (multi-language: English & Japanese)
+  - LANGS.md - Language selection
+  - en/ - English documentation
+    - README.md - Introduction
+    - SUMMARY.md - Table of contents
+    - installation.md - Installation guide
+    - quick-start.md - Quick start guide
+    - config.md - book.json configuration
+    - structure.md - Project structure
+    - features/ - Feature documentation (mermaid, collapsible, search)
+    - migration.md - Migration from HonKit
+    - faq.md - FAQ
+  - ja/ - Japanese documentation (same structure)
+- [ ] Build docs with guidebook and publish to GitHub Pages
+- [ ] Add GitHub Pages documentation link to README.md
 
 ## Changelog
 
