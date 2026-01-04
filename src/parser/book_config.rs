@@ -4,6 +4,13 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
+/// Plugins that are enabled by default (unless explicitly disabled with "-plugin-name")
+const DEFAULT_ENABLED_PLUGINS: &[&str] = &[
+    "collapsible-chapters",
+    "back-to-top-button",
+    "mermaid-md-adoc",
+];
+
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct BookConfig {
     #[serde(default)]
@@ -49,9 +56,22 @@ impl BookConfig {
         Ok(config)
     }
 
-    /// Check if a plugin is enabled (not prefixed with -)
+    /// Check if a plugin is enabled.
+    /// - Explicitly disabled with "-plugin-name" → false
+    /// - Explicitly enabled with "plugin-name" → true
+    /// - In DEFAULT_ENABLED_PLUGINS → true
+    /// - Otherwise → false
     pub fn is_plugin_enabled(&self, name: &str) -> bool {
-        self.plugins.iter().any(|p| p == name)
+        // Check if explicitly disabled
+        if self.plugins.iter().any(|p| *p == format!("-{}", name)) {
+            return false;
+        }
+        // Check if explicitly enabled
+        if self.plugins.iter().any(|p| p == name) {
+            return true;
+        }
+        // Check if default enabled
+        DEFAULT_ENABLED_PLUGINS.contains(&name)
     }
 
     /// Check if a plugin is explicitly disabled (prefixed with -)
@@ -84,5 +104,30 @@ mod tests {
         assert!(config.is_plugin_enabled("back-to-top-button"));
         assert!(config.is_plugin_disabled("search"));
         assert_eq!(config.get_website_style(), Some(&"styles/website.css".to_string()));
+    }
+
+    #[test]
+    fn test_default_enabled_plugins() {
+        // Empty plugins list - default plugins should still be enabled
+        let json = r#"{"title": "Test"}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+
+        assert!(config.is_plugin_enabled("collapsible-chapters"));
+        assert!(config.is_plugin_enabled("back-to-top-button"));
+        assert!(config.is_plugin_enabled("mermaid-md-adoc"));
+        // Non-default plugin should be disabled
+        assert!(!config.is_plugin_enabled("some-other-plugin"));
+    }
+
+    #[test]
+    fn test_explicitly_disable_default_plugin() {
+        // Explicitly disable a default plugin
+        let json = r#"{"plugins": ["-collapsible-chapters"]}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+
+        assert!(!config.is_plugin_enabled("collapsible-chapters"));
+        // Other default plugins should still be enabled
+        assert!(config.is_plugin_enabled("back-to-top-button"));
+        assert!(config.is_plugin_enabled("mermaid-md-adoc"));
     }
 }
