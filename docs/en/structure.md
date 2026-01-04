@@ -59,12 +59,12 @@ For multi-language books:
 
 Place images and other assets in an `assets/` folder:
 
-```markdown
+```
 ![My Image](assets/images/screenshot.png)
 ```
 
 Relative paths are also supported:
 
-```markdown
+```
 ![My Image](../assets/images/screenshot.png)
 ```

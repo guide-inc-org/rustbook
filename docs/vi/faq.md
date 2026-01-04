@@ -66,6 +66,6 @@ Thêm dòng này vào `~/.zshrc` hoặc `~/.bashrc`.
 
 Kiểm tra đường dẫn hình ảnh là tương đối từ file markdown:
 
-```markdown
-![Hình ảnh](./assets/image.png)
+```
+![Image](./assets/image.png)
 ```

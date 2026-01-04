@@ -66,6 +66,6 @@ Make sure you're running `guidebook build` in the directory containing `SUMMARY.
 
 Check that image paths are relative to the markdown file:
 
-```markdown
+```
 ![Image](./assets/image.png)
 ```

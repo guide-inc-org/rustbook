@@ -432,18 +432,50 @@ fn autolink_urls(html: &str) -> String {
 
 /// Convert remaining markdown image syntax ![alt](url) to <img> tags
 /// This handles images inside raw HTML blocks that pulldown-cmark doesn't parse
+/// Skips content inside <code> and <pre> tags
 fn convert_remaining_markdown_images(html: &str) -> String {
     let mut result = String::new();
-    let mut chars = html.chars().peekable();
+    let mut chars = html.char_indices().peekable();
+    let mut in_code = false;  // Track if we're inside <code> or <pre>
 
-    while let Some(c) = chars.next() {
-        if c == '!' && chars.peek() == Some(&'[') {
+    while let Some((_, c)) = chars.next() {
+        // Check if we're inside an HTML tag
+        if c == '<' {
+            result.push(c);
+
+            // Collect the tag
+            let mut tag_content = String::new();
+            while let Some((_, ch)) = chars.next() {
+                result.push(ch);
+                if ch == '>' {
+                    break;
+                }
+                tag_content.push(ch);
+            }
+
+            // Check for code/pre tags
+            let tag_lower = tag_content.to_lowercase();
+            if tag_lower.starts_with("code") || tag_lower.starts_with("pre") {
+                in_code = true;
+            } else if tag_lower.starts_with("/code") || tag_lower.starts_with("/pre") {
+                in_code = false;
+            }
+            continue;
+        }
+
+        // Skip image conversion if inside code block
+        if in_code {
+            result.push(c);
+            continue;
+        }
+
+        if c == '!' && chars.peek().map(|(_, ch)| *ch) == Some('[') {
             chars.next(); // consume '['
 
             // Collect alt text until ']'
             let mut alt = String::new();
             let mut bracket_depth = 1;
-            while let Some(ch) = chars.next() {
+            while let Some((_, ch)) = chars.next() {
                 if ch == '[' {
                     bracket_depth += 1;
                     alt.push(ch);
@@ -459,13 +491,13 @@ fn convert_remaining_markdown_images(html: &str) -> String {
             }
 
             // Check for '(' after ']'
-            if chars.peek() == Some(&'(') {
+            if chars.peek().map(|(_, ch)| *ch) == Some('(') {
                 chars.next(); // consume '('
 
                 // Collect URL until ')'
                 let mut url = String::new();
                 let mut paren_depth = 1;
-                while let Some(ch) = chars.next() {
+                while let Some((_, ch)) = chars.next() {
                     if ch == '(' {
                         paren_depth += 1;
                         url.push(ch);

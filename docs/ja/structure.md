@@ -59,12 +59,12 @@ my-book/
 
 画像などのアセットは `assets/` フォルダに配置：
 
-```markdown
-![画像](assets/images/screenshot.png)
+```
+![Image](assets/images/screenshot.png)
 ```
 
 相対パスも使用可能：
 
-```markdown
-![画像](../assets/images/screenshot.png)
+```
+![Image](../assets/images/screenshot.png)
 ```

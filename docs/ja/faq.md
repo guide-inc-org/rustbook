@@ -66,6 +66,6 @@ export PATH="$PATH:$HOME/.local/bin"
 
 画像パスが Markdown ファイルからの相対パスであることを確認：
 
-```markdown
-![画像](./assets/image.png)
+```
+![Image](./assets/image.png)
 ```

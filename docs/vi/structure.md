@@ -60,12 +60,12 @@ Cho sách đa ngôn ngữ:
 
 Đặt hình ảnh và assets khác trong thư mục `assets/`:
 
-```markdown
-![Hình ảnh](assets/images/screenshot.png)
+```
+![Image](assets/images/screenshot.png)
 ```
 
 Đường dẫn tương đối cũng được hỗ trợ:
 
-```markdown
-![Hình ảnh](../assets/images/screenshot.png)
+```
+![Image](../assets/images/screenshot.png)
 ```
