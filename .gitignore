@@ -12,3 +12,6 @@
 
 # OS
 .DS_Store
+
+# Build output
+_book/
