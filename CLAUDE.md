@@ -117,7 +117,7 @@ guidebook update
   - Add quick install instructions (curl | sh)
   - Add `guidebook update` command documentation
   - Simplify structure (refer to HonKit's README)
-- [ ] Create `docs/` folder (multi-language: English & Japanese)
+- [ ] Create `docs/` folder (multi-language: English, Japanese & Vietnamese)
   - LANGS.md - Language selection
   - en/ - English documentation
     - README.md - Introduction
@@ -130,6 +130,7 @@ guidebook update
     - migration.md - Migration from HonKit
     - faq.md - FAQ
   - ja/ - Japanese documentation (same structure)
+  - vi/ - Vietnamese documentation (same structure)
 - [ ] Build docs with guidebook and publish to GitHub Pages
 - [ ] Add GitHub Pages documentation link to README.md
 
