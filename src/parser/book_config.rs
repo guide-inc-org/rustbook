@@ -9,6 +9,7 @@ const DEFAULT_ENABLED_PLUGINS: &[&str] = &[
     "collapsible-chapters",
     "back-to-top-button",
     "mermaid-md-adoc",
+    "fontsettings",
 ];
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -30,6 +31,10 @@ pub struct BookConfig {
 
     #[serde(default, rename = "pluginsConfig")]
     pub plugins_config: HashMap<String, serde_json::Value>,
+
+    /// User-defined variables that can be used in Markdown with {{ book.xxx }} syntax
+    #[serde(default)]
+    pub variables: HashMap<String, serde_json::Value>,
 }
 
 impl BookConfig {
@@ -43,7 +48,8 @@ impl BookConfig {
     "plugins": [
         "collapsible-chapters",
         "back-to-top-button",
-        "mermaid-md-adoc"
+        "mermaid-md-adoc",
+        "fontsettings"
     ]
 }
 "#;
@@ -115,6 +121,7 @@ mod tests {
         assert!(config.is_plugin_enabled("collapsible-chapters"));
         assert!(config.is_plugin_enabled("back-to-top-button"));
         assert!(config.is_plugin_enabled("mermaid-md-adoc"));
+        assert!(config.is_plugin_enabled("fontsettings"));
         // Non-default plugin should be disabled
         assert!(!config.is_plugin_enabled("some-other-plugin"));
     }
@@ -129,5 +136,43 @@ mod tests {
         // Other default plugins should still be enabled
         assert!(config.is_plugin_enabled("back-to-top-button"));
         assert!(config.is_plugin_enabled("mermaid-md-adoc"));
+        assert!(config.is_plugin_enabled("fontsettings"));
+    }
+
+    #[test]
+    fn test_explicitly_disable_fontsettings() {
+        // Explicitly disable fontsettings plugin
+        let json = r#"{"plugins": ["-fontsettings"]}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+
+        assert!(!config.is_plugin_enabled("fontsettings"));
+        // Other default plugins should still be enabled
+        assert!(config.is_plugin_enabled("back-to-top-button"));
+        assert!(config.is_plugin_enabled("mermaid-md-adoc"));
+        assert!(config.is_plugin_enabled("collapsible-chapters"));
+    }
+
+    #[test]
+    fn test_parse_variables() {
+        let json = r#"{
+            "title": "Test Book",
+            "variables": {
+                "version": "1.0.0",
+                "author": "Guide Inc",
+                "year": 2024
+            }
+        }"#;
+
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert_eq!(config.variables.get("version").unwrap(), "1.0.0");
+        assert_eq!(config.variables.get("author").unwrap(), "Guide Inc");
+        assert_eq!(config.variables.get("year").unwrap(), 2024);
+    }
+
+    #[test]
+    fn test_empty_variables() {
+        let json = r#"{"title": "Test"}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert!(config.variables.is_empty());
     }
 }

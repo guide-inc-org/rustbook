@@ -1,8 +1,9 @@
 mod renderer;
 mod template;
 
-use crate::parser::{self, BookConfig, Language, Summary, SummaryItem};
+use crate::parser::{self, apply_glossary, parse_front_matter, BookConfig, Glossary, Language, Summary, SummaryItem};
 use anyhow::{Context, Result};
+use regex::Regex;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
@@ -30,6 +31,7 @@ struct BuildStats {
 const GITBOOK_CSS: &str = include_str!("../../templates/gitbook.css");
 const GITBOOK_JS: &str = include_str!("../../templates/gitbook.js");
 const COLLAPSIBLE_JS: &str = include_str!("../../templates/collapsible.js");
+const FONTSETTINGS_JS: &str = include_str!("../../templates/fontsettings.js");
 const SEARCH_JS: &str = include_str!("../../templates/search.js");
 
 /// Build the book from source directory to output directory
@@ -78,6 +80,12 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_sea
     let templates = Templates::new(config)?;
     let mut stats = BuildStats::default();
 
+    // Load glossary if exists
+    let glossary = Glossary::load(source)?;
+    if !glossary.is_empty() {
+        println!("  Loaded glossary with {} terms", glossary.entries.len());
+    }
+
     // Create output directory
     fs::create_dir_all(output)?;
 
@@ -98,22 +106,34 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_sea
     }
 
     // Build each chapter
-    stats.pages += build_chapters(source, output, &summary.items, config, &templates, &summary)?;
+    stats.pages += build_chapters(source, output, &summary.items, config, &templates, &summary, &glossary)?;
 
     // Generate index.html from README.md if exists
     let readme_path = source.join("README.md");
     if readme_path.exists() {
-        let content = fs::read_to_string(&readme_path)?;
+        let raw_content = fs::read_to_string(&readme_path)?;
+        // Parse front matter
+        let parsed = parse_front_matter(&raw_content);
+        let front_matter = parsed.front_matter;
+        // Expand variables before rendering
+        let content = expand_variables(&parsed.content, config);
         let html_content = render_markdown(&content);
+        // Apply glossary terms
+        let html_content = apply_glossary(&html_content, &glossary);
         let toc_items = extract_headings(&content);
-        let page_html = templates.render_page(
-            &config.title,
+        // Use front matter title if available, otherwise use config title
+        let page_title = front_matter.as_ref()
+            .and_then(|fm| fm.title.as_deref())
+            .unwrap_or(&config.title);
+        let page_html = templates.render_page_with_meta(
+            page_title,
             &html_content,
             "./",
             config,
             &summary,
             Some("index.html"),
             &toc_items,
+            front_matter.as_ref(),
         )?;
         fs::write(output.join("index.html"), page_html)?;
         stats.pages += 1;
@@ -140,6 +160,11 @@ fn write_static_assets(output: &Path, config: &BookConfig) -> Result<()> {
     // Write collapsible JS only if plugin is enabled
     if config.is_plugin_enabled("collapsible-chapters") {
         fs::write(gitbook_dir.join("collapsible.js"), COLLAPSIBLE_JS)?;
+    }
+
+    // Write fontsettings JS only if plugin is enabled
+    if config.is_plugin_enabled("fontsettings") {
+        fs::write(gitbook_dir.join("fontsettings.js"), FONTSETTINGS_JS)?;
     }
 
     // Write search JS
@@ -198,6 +223,7 @@ fn build_chapters(
     config: &BookConfig,
     templates: &Templates,
     summary: &Summary,
+    glossary: &Glossary,
 ) -> Result<usize> {
     let mut count = 0;
 
@@ -207,8 +233,15 @@ fn build_chapters(
                 let src_file = source.join(md_path);
                 if src_file.exists() {
                     // Read and render markdown
-                    let content = fs::read_to_string(&src_file)?;
+                    let raw_content = fs::read_to_string(&src_file)?;
+                    // Parse front matter
+                    let parsed = parse_front_matter(&raw_content);
+                    let front_matter = parsed.front_matter;
+                    // Expand variables before rendering
+                    let content = expand_variables(&parsed.content, config);
                     let html_content = render_markdown_with_path(&content, Some(md_path));
+                    // Apply glossary terms
+                    let html_content = apply_glossary(&html_content, glossary);
                     let toc_items = extract_headings(&content);
 
                     // Generate output path
@@ -223,15 +256,21 @@ fn build_chapters(
                         "./".to_string()
                     };
 
+                    // Use front matter title if available, otherwise use summary title
+                    let page_title = front_matter.as_ref()
+                        .and_then(|fm| fm.title.as_deref())
+                        .unwrap_or(title);
+
                     // Render with template
-                    let page_html = templates.render_page(
-                        title,
+                    let page_html = templates.render_page_with_meta(
+                        page_title,
                         &html_content,
                         &root_path,
                         config,
                         summary,
                         Some(&html_path),
                         &toc_items,
+                        front_matter.as_ref(),
                     )?;
 
                     // Write output
@@ -247,7 +286,7 @@ fn build_chapters(
 
             // Build children recursively
             if !children.is_empty() {
-                count += build_chapters(source, output, children, config, templates, summary)?;
+                count += build_chapters(source, output, children, config, templates, summary, glossary)?;
             }
         }
     }
@@ -433,6 +472,35 @@ fn generate_search_index(source: &Path, output: &Path, summary: &Summary) -> Res
     Ok(())
 }
 
+/// Expand book variables in Markdown content
+/// Replaces {{ book.xxx }} patterns with values from config.variables
+fn expand_variables(content: &str, config: &BookConfig) -> String {
+    if config.variables.is_empty() {
+        return content.to_string();
+    }
+
+    // Match {{ book.xxx }} pattern with optional whitespace
+    // Also match {{book.xxx}} without spaces
+    let re = Regex::new(r"\{\{\s*book\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}").unwrap();
+
+    re.replace_all(content, |caps: &regex::Captures| {
+        let var_name = &caps[1];
+        if let Some(value) = config.variables.get(var_name) {
+            // Convert JSON value to string
+            match value {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Number(n) => n.to_string(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                _ => value.to_string(), // For arrays/objects, use JSON representation
+            }
+        } else {
+            // Variable not found, keep original text
+            caps[0].to_string()
+        }
+    })
+    .to_string()
+}
+
 fn copy_gitbook_static_to_root(output: &Path) -> Result<()> {
     let gitbook_dir = output.join("gitbook");
     fs::create_dir_all(&gitbook_dir)?;
@@ -485,4 +553,113 @@ fn copy_gitbook_static_to_root(output: &Path) -> Result<()> {
     fs::create_dir_all(&images_dir)?;
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashMap;
+
+    fn create_test_config(variables: HashMap<String, serde_json::Value>) -> BookConfig {
+        BookConfig {
+            variables,
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn test_expand_variables_basic() {
+        let mut vars = HashMap::new();
+        vars.insert("version".to_string(), serde_json::json!("1.0.0"));
+        vars.insert("author".to_string(), serde_json::json!("Guide Inc"));
+
+        let config = create_test_config(vars);
+        let content = "Version: {{ book.version }}\nAuthor: {{ book.author }}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Version: 1.0.0\nAuthor: Guide Inc");
+    }
+
+    #[test]
+    fn test_expand_variables_no_spaces() {
+        let mut vars = HashMap::new();
+        vars.insert("version".to_string(), serde_json::json!("2.0.0"));
+
+        let config = create_test_config(vars);
+        let content = "Version: {{book.version}}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Version: 2.0.0");
+    }
+
+    #[test]
+    fn test_expand_variables_with_extra_spaces() {
+        let mut vars = HashMap::new();
+        vars.insert("name".to_string(), serde_json::json!("Test"));
+
+        let config = create_test_config(vars);
+        let content = "Name: {{  book.name  }}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Name: Test");
+    }
+
+    #[test]
+    fn test_expand_variables_number() {
+        let mut vars = HashMap::new();
+        vars.insert("year".to_string(), serde_json::json!(2024));
+
+        let config = create_test_config(vars);
+        let content = "Year: {{ book.year }}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Year: 2024");
+    }
+
+    #[test]
+    fn test_expand_variables_boolean() {
+        let mut vars = HashMap::new();
+        vars.insert("published".to_string(), serde_json::json!(true));
+
+        let config = create_test_config(vars);
+        let content = "Published: {{ book.published }}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Published: true");
+    }
+
+    #[test]
+    fn test_expand_variables_unknown_variable() {
+        let mut vars = HashMap::new();
+        vars.insert("known".to_string(), serde_json::json!("value"));
+
+        let config = create_test_config(vars);
+        let content = "Known: {{ book.known }}, Unknown: {{ book.unknown }}";
+        let result = expand_variables(content, &config);
+
+        // Unknown variable should remain unchanged
+        assert_eq!(result, "Known: value, Unknown: {{ book.unknown }}");
+    }
+
+    #[test]
+    fn test_expand_variables_empty_config() {
+        let config = create_test_config(HashMap::new());
+        let content = "No variables: {{ book.test }}";
+        let result = expand_variables(content, &config);
+
+        // Should return content unchanged
+        assert_eq!(result, "No variables: {{ book.test }}");
+    }
+
+    #[test]
+    fn test_expand_variables_in_markdown() {
+        let mut vars = HashMap::new();
+        vars.insert("version".to_string(), serde_json::json!("1.0.0"));
+
+        let config = create_test_config(vars);
+        let content = "# Version {{ book.version }}\n\nThis is version {{ book.version }}.";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "# Version 1.0.0\n\nThis is version 1.0.0.");
+    }
 }

@@ -47,6 +47,9 @@ enum Commands {
         /// Port to listen on
         #[arg(short, long, default_value = "4000")]
         port: u16,
+        /// Open browser automatically
+        #[arg(short, long)]
+        open: bool,
     },
     /// Update guidebook to the latest version
     Update,
@@ -60,16 +63,14 @@ fn main() -> Result<()> {
 
     match cli.command {
         Commands::Init { path } => {
-            println!("Initializing book in {:?}", path);
-            // TODO: Implement init
-            Ok(())
+            init_book(&path)
         }
         Commands::Build { path, output } => {
             println!("Building book from {:?} to {:?}", path, output);
             builder::build(&path, &output)
         }
-        Commands::Serve { path, port } => {
-            serve_book(&path, port)
+        Commands::Serve { path, port, open } => {
+            serve_book(&path, port, open)
         }
         Commands::Update => {
             update_self()
@@ -77,7 +78,73 @@ fn main() -> Result<()> {
     }
 }
 
-fn serve_book(source: &PathBuf, port: u16) -> Result<()> {
+fn init_book(path: &PathBuf) -> Result<()> {
+    println!("Initializing book in {:?}", path);
+
+    // Create directory if it doesn't exist
+    if !path.exists() {
+        fs::create_dir_all(path)?;
+        println!("  Created directory {:?}", path);
+    }
+
+    // Create README.md
+    let readme_path = path.join("README.md");
+    if !readme_path.exists() {
+        let readme_content = r#"# Introduction
+
+Welcome to your new book!
+
+This file serves as your book's introduction or preface.
+"#;
+        fs::write(&readme_path, readme_content)?;
+        println!("  Created README.md");
+    } else {
+        println!("  README.md already exists, skipping");
+    }
+
+    // Create SUMMARY.md
+    let summary_path = path.join("SUMMARY.md");
+    if !summary_path.exists() {
+        let summary_content = r#"# Summary
+
+* [Introduction](README.md)
+"#;
+        fs::write(&summary_path, summary_content)?;
+        println!("  Created SUMMARY.md");
+    } else {
+        println!("  SUMMARY.md already exists, skipping");
+    }
+
+    // Create book.json
+    let book_json_path = path.join("book.json");
+    if !book_json_path.exists() {
+        let book_json_content = r#"{
+    "title": "My Book",
+    "description": "",
+    "author": "",
+    "plugins": [
+        "collapsible-chapters",
+        "back-to-top-button",
+        "mermaid-md-adoc"
+    ]
+}
+"#;
+        fs::write(&book_json_path, book_json_content)?;
+        println!("  Created book.json");
+    } else {
+        println!("  book.json already exists, skipping");
+    }
+
+    println!("\nBook initialized successfully!");
+    println!("\nNext steps:");
+    println!("  1. Edit SUMMARY.md to define your book structure");
+    println!("  2. Create markdown files for your chapters");
+    println!("  3. Run 'guidebook serve' to preview your book");
+
+    Ok(())
+}
+
+fn serve_book(source: &PathBuf, port: u16, open_browser: bool) -> Result<()> {
     // Build to temp directory
     let temp_dir = std::env::temp_dir().join("guidebook-serve");
     if temp_dir.exists() {
@@ -141,9 +208,17 @@ fn serve_book(source: &PathBuf, port: u16) -> Result<()> {
         }
     })?;
 
-    println!("\n📚 Serving book at http://localhost:{}/", port);
+    let url = format!("http://localhost:{}/", port);
+    println!("\n📚 Serving book at {}", url);
     println!("   🔥 Hot reload enabled - changes will auto-refresh");
     println!("   Press Ctrl+C to stop\n");
+
+    // Open browser if requested
+    if open_browser {
+        if let Err(e) = open::that(&url) {
+            eprintln!("   Failed to open browser: {}", e);
+        }
+    }
 
     // Keep watcher alive
     let _watcher = watcher;

@@ -1,4 +1,4 @@
-use crate::parser::{BookConfig, Summary, SummaryItem};
+use crate::parser::{BookConfig, FrontMatter, Summary, SummaryItem};
 use crate::builder::TocItem;
 use anyhow::Result;
 use tera::{Context, Tera};
@@ -52,6 +52,7 @@ impl Templates {
         // Check plugin features
         context.insert("back_to_top", &config.is_plugin_enabled("back-to-top-button"));
         context.insert("mermaid", &config.is_plugin_enabled("mermaid-md-adoc"));
+        context.insert("fontsettings", &config.is_plugin_enabled("fontsettings"));
 
         // Generate TOC HTML
         let toc_html = generate_toc_html(toc_items);
@@ -61,6 +62,86 @@ impl Templates {
         // Custom styles
         let has_custom_style = config.get_website_style().is_some();
         context.insert("has_custom_style", &has_custom_style);
+
+        // Add book variables to context (accessible as {{ book.xxx }} in templates)
+        if !config.variables.is_empty() {
+            context.insert("book", &config.variables);
+        }
+
+        // No description by default
+        context.insert("description", &"");
+        context.insert("has_description", &false);
+
+        let html = self.tera.render("page.html", &context)?;
+        Ok(html)
+    }
+
+    /// Render a page with front matter metadata support
+    pub fn render_page_with_meta(
+        &self,
+        title: &str,
+        content: &str,
+        root_path: &str,
+        config: &BookConfig,
+        summary: &Summary,
+        current_path: Option<&str>,
+        toc_items: &[TocItem],
+        front_matter: Option<&FrontMatter>,
+    ) -> Result<String> {
+        let mut context = Context::new();
+
+        context.insert("title", title);
+        context.insert("book_title", &config.title);
+        context.insert("content", content);
+        context.insert("root_path", root_path);
+
+        // Check plugin features
+        let collapsible = config.is_plugin_enabled("collapsible-chapters");
+        context.insert("collapsible", &collapsible);
+
+        // Generate sidebar HTML - links need root_path prefix
+        let sidebar = generate_sidebar(&summary.items, current_path, root_path, collapsible);
+        context.insert("sidebar", &sidebar);
+
+        // Generate prev/next navigation
+        let (prev_page, next_page) = get_prev_next_pages(&summary.items, current_path);
+        context.insert("prev_url", &prev_page.as_ref().map(|(url, _)| url.clone()));
+        context.insert("prev_title", &prev_page.map(|(_, title)| title));
+        context.insert("next_url", &next_page.as_ref().map(|(url, _)| url.clone()));
+        context.insert("next_title", &next_page.map(|(_, title)| title));
+
+        // Check plugin features
+        context.insert("back_to_top", &config.is_plugin_enabled("back-to-top-button"));
+        context.insert("mermaid", &config.is_plugin_enabled("mermaid-md-adoc"));
+        context.insert("fontsettings", &config.is_plugin_enabled("fontsettings"));
+
+        // Generate TOC HTML
+        let toc_html = generate_toc_html(toc_items);
+        context.insert("toc", &toc_html);
+        context.insert("has_toc", &!toc_items.is_empty());
+
+        // Custom styles
+        let has_custom_style = config.get_website_style().is_some();
+        context.insert("has_custom_style", &has_custom_style);
+
+        // Add book variables to context (accessible as {{ book.xxx }} in templates)
+        if !config.variables.is_empty() {
+            context.insert("book", &config.variables);
+        }
+
+        // Add front matter metadata
+        if let Some(fm) = front_matter {
+            if let Some(ref desc) = fm.description {
+                context.insert("description", desc);
+                context.insert("has_description", &true);
+            } else {
+                context.insert("description", &"");
+                context.insert("has_description", &false);
+            }
+        } else {
+            context.insert("description", &"");
+            context.insert("has_description", &false);
+        }
 
         let html = self.tera.render("page.html", &context)?;
         Ok(html)
@@ -234,6 +315,9 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ title }} | {{ book_title }}</title>
+    {% if has_description %}
+    <meta name="description" content="{{ description }}">
+    {% endif %}
     <link rel="stylesheet" href="{{ root_path }}gitbook/gitbook.css">
     {% if has_custom_style %}
     <link rel="stylesheet" href="{{ root_path }}gitbook/style.css">
@@ -264,6 +348,16 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
                 <line x1="3" y1="18" x2="21" y2="18"></line>
             </svg>
         </div>
+        {% if fontsettings %}
+        <div class="fontsettings-toolbar" title="Font Settings">
+            <button class="fontsettings-decrease" title="Decrease font size">A-</button>
+            <button class="fontsettings-increase" title="Increase font size">A+</button>
+            <span class="fontsettings-separator"></span>
+            <button class="fontsettings-theme" data-theme="white" title="White theme"></button>
+            <button class="fontsettings-theme" data-theme="sepia" title="Sepia theme"></button>
+            <button class="fontsettings-theme" data-theme="night" title="Night theme"></button>
+        </div>
+        {% endif %}
         {% if has_toc %}
         <div class="toc-toggle" title="Toggle Table of Contents">
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -314,6 +408,9 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     <script src="{{ root_path }}gitbook/gitbook.js"></script>
     {% if collapsible %}
     <script src="{{ root_path }}gitbook/collapsible.js"></script>
+    {% endif %}
+    {% if fontsettings %}
+    <script src="{{ root_path }}gitbook/fontsettings.js"></script>
     {% endif %}
     <script src="{{ root_path }}gitbook/search.js"></script>
 </body>

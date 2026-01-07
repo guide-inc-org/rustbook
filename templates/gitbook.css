@@ -719,3 +719,660 @@ body.loading .markdown-section {
         max-width: calc(100% - 260px);
     }
 }
+
+/* ==========================================================================
+   Font Settings Plugin
+   ========================================================================== */
+
+/* Toolbar container */
+.fontsettings-toolbar {
+    position: fixed;
+    top: 10px;
+    right: 60px;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    background: #fff;
+    border: 1px solid #e8e8e8;
+    border-radius: 4px;
+    padding: 4px 8px;
+    z-index: 101;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+/* When TOC toggle is visible, adjust position */
+.book:not(.toc-hidden) .fontsettings-toolbar {
+    right: 300px;
+}
+
+.fontsettings-toolbar .fontsettings-separator {
+    width: 1px;
+    height: 20px;
+    background: #e8e8e8;
+    margin: 0 4px;
+}
+
+.fontsettings-toolbar button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    border-radius: 3px;
+    color: #666;
+    font-size: 14px;
+    font-weight: 600;
+    transition: background 0.2s, color 0.2s;
+}
+
+.fontsettings-toolbar button:hover:not(.disabled) {
+    background: #f0f0f0;
+    color: #333;
+}
+
+.fontsettings-toolbar button.disabled {
+    opacity: 0.4;
+    cursor: not-allowed;
+}
+
+.fontsettings-toolbar button.active {
+    background: #008cff;
+    color: white;
+}
+
+/* Font size buttons */
+.fontsettings-decrease {
+    font-size: 12px !important;
+}
+
+.fontsettings-increase {
+    font-size: 16px !important;
+}
+
+/* Theme buttons */
+.fontsettings-theme[data-theme="white"] {
+    background: #fff !important;
+    border: 1px solid #ccc !important;
+}
+
+.fontsettings-theme[data-theme="sepia"] {
+    background: #f4ecd8 !important;
+    border: 1px solid #d4c9b0 !important;
+}
+
+.fontsettings-theme[data-theme="night"] {
+    background: #1c1c1c !important;
+    border: 1px solid #3a3a3a !important;
+}
+
+.fontsettings-theme.active {
+    box-shadow: 0 0 0 2px #008cff !important;
+}
+
+/* ==========================================================================
+   Theme: White (default)
+   ========================================================================== */
+.book.theme-white {
+    /* Default styles - no changes needed */
+}
+
+/* ==========================================================================
+   Theme: Sepia
+   ========================================================================== */
+.book.theme-sepia {
+    background: #f4ecd8;
+}
+
+.book.theme-sepia .book-summary {
+    background: #ede6d4;
+    border-right-color: #d4c9b0;
+}
+
+.book.theme-sepia .book-summary .summary li.chapter a,
+.book.theme-sepia .book-summary .summary li.chapter .chapter-title {
+    color: #5f4b32;
+}
+
+.book.theme-sepia .book-summary .summary li.chapter a:hover {
+    background: #e5dcc8;
+    color: #704214;
+}
+
+.book.theme-sepia .book-summary .summary li.chapter.active > a {
+    background: #ddd4c0;
+    border-left-color: #704214;
+    color: #704214;
+}
+
+.book.theme-sepia .book-summary .summary li.divider {
+    background: #d4c9b0;
+}
+
+.book.theme-sepia .search-wrapper {
+    border-bottom-color: #d4c9b0;
+}
+
+.book.theme-sepia .search-input {
+    background: #f4ecd8;
+    border-color: #d4c9b0;
+    color: #5f4b32;
+}
+
+.book.theme-sepia .search-results {
+    background: #f4ecd8;
+    border-color: #d4c9b0;
+}
+
+.book.theme-sepia .search-result-item {
+    color: #5f4b32;
+    border-bottom-color: #e5dcc8;
+}
+
+.book.theme-sepia .search-result-item:hover {
+    background: #ede6d4;
+}
+
+.book.theme-sepia .markdown-section {
+    color: #5f4b32;
+}
+
+.book.theme-sepia .markdown-section a {
+    color: #704214;
+}
+
+.book.theme-sepia .markdown-section h1,
+.book.theme-sepia .markdown-section h2 {
+    border-bottom-color: #d4c9b0;
+}
+
+.book.theme-sepia .markdown-section code {
+    background: #ebe4d0;
+}
+
+.book.theme-sepia .markdown-section pre {
+    background: #ebe4d0;
+}
+
+.book.theme-sepia .markdown-section table th {
+    background: #ebe4d0;
+}
+
+.book.theme-sepia .markdown-section table th,
+.book.theme-sepia .markdown-section table td {
+    border-color: #d4c9b0;
+}
+
+.book.theme-sepia .markdown-section table tr:nth-child(even) {
+    background: #f0e8d8;
+}
+
+.book.theme-sepia .markdown-section blockquote {
+    color: #7a6a52;
+    border-left-color: #d4c9b0;
+}
+
+.book.theme-sepia .page-nav {
+    background: rgba(95, 75, 50, 0.1);
+    color: #7a6a52;
+}
+
+.book.theme-sepia .page-nav:hover {
+    background: rgba(95, 75, 50, 0.2);
+    color: #5f4b32;
+}
+
+.book.theme-sepia .sidebar-toggle,
+.book.theme-sepia .toc-toggle {
+    background: #f4ecd8;
+    border-color: #d4c9b0;
+}
+
+.book.theme-sepia .sidebar-toggle:hover,
+.book.theme-sepia .toc-toggle:hover {
+    background: #ede6d4;
+}
+
+.book.theme-sepia .sidebar-toggle svg,
+.book.theme-sepia .toc-toggle svg {
+    color: #7a6a52;
+}
+
+.book.theme-sepia .page-toc {
+    background: #f4ecd8;
+    border-left-color: #d4c9b0;
+}
+
+.book.theme-sepia .page-toc .toc-header {
+    color: #7a6a52;
+    border-bottom-color: #d4c9b0;
+}
+
+.book.theme-sepia .page-toc .toc-list li a {
+    color: #7a6a52;
+}
+
+.book.theme-sepia .page-toc .toc-list li a:hover {
+    color: #704214;
+}
+
+.book.theme-sepia .page-toc .toc-list li.active a {
+    color: #704214;
+}
+
+.book.theme-sepia .fontsettings-toolbar {
+    background: #f4ecd8;
+    border-color: #d4c9b0;
+}
+
+.book.theme-sepia .fontsettings-toolbar button {
+    color: #7a6a52;
+}
+
+.book.theme-sepia .fontsettings-toolbar button:hover:not(.disabled) {
+    background: #ede6d4;
+    color: #5f4b32;
+}
+
+.book.theme-sepia .fontsettings-separator {
+    background: #d4c9b0;
+}
+
+.book.theme-sepia .back-to-top {
+    background: #704214;
+}
+
+.book.theme-sepia .back-to-top:hover {
+    background: #5a3510;
+}
+
+/* ==========================================================================
+   Theme: Night
+   ========================================================================== */
+.book.theme-night {
+    background: #1c1c1c;
+}
+
+.book.theme-night .book-summary {
+    background: #262626;
+    border-right-color: #3a3a3a;
+}
+
+.book.theme-night .book-summary .summary li.chapter a,
+.book.theme-night .book-summary .summary li.chapter .chapter-title {
+    color: #c8c8c8;
+}
+
+.book.theme-night .book-summary .summary li.chapter a:hover {
+    background: #333;
+    color: #6cb2eb;
+}
+
+.book.theme-night .book-summary .summary li.chapter.active > a {
+    background: #333;
+    border-left-color: #6cb2eb;
+    color: #6cb2eb;
+}
+
+.book.theme-night .book-summary .summary li.part-title span {
+    color: #808080;
+}
+
+.book.theme-night .book-summary .summary li.divider {
+    background: #3a3a3a;
+}
+
+.book.theme-night .search-wrapper {
+    border-bottom-color: #3a3a3a;
+}
+
+.book.theme-night .search-input {
+    background: #1c1c1c;
+    border-color: #3a3a3a;
+    color: #c8c8c8;
+}
+
+.book.theme-night .search-input::placeholder {
+    color: #666;
+}
+
+.book.theme-night .search-results {
+    background: #262626;
+    border-color: #3a3a3a;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+}
+
+.book.theme-night .search-result-item {
+    color: #c8c8c8;
+    border-bottom-color: #3a3a3a;
+}
+
+.book.theme-night .search-result-item:hover {
+    background: #333;
+}
+
+.book.theme-night .search-result-title {
+    color: #e8e8e8;
+}
+
+.book.theme-night .search-result-snippet {
+    color: #999;
+}
+
+.book.theme-night .search-result-item mark {
+    background: #5a4a00;
+    color: #fff;
+}
+
+.book.theme-night .markdown-section {
+    color: #c8c8c8;
+}
+
+.book.theme-night .markdown-section a {
+    color: #6cb2eb;
+}
+
+.book.theme-night .markdown-section h1,
+.book.theme-night .markdown-section h2,
+.book.theme-night .markdown-section h3,
+.book.theme-night .markdown-section h4,
+.book.theme-night .markdown-section h5,
+.book.theme-night .markdown-section h6 {
+    color: #e8e8e8;
+}
+
+.book.theme-night .markdown-section h1,
+.book.theme-night .markdown-section h2 {
+    border-bottom-color: #3a3a3a;
+}
+
+.book.theme-night .markdown-section code {
+    background: #2d2d2d;
+    color: #e8e8e8;
+}
+
+.book.theme-night .markdown-section pre {
+    background: #2d2d2d;
+}
+
+.book.theme-night .markdown-section pre code {
+    color: #c8c8c8;
+}
+
+.book.theme-night .markdown-section table {
+    background: #1c1c1c !important;
+}
+
+.book.theme-night .markdown-section table th,
+.book.theme-night .page-inner table th,
+.book.theme-night table th {
+    background: #2d2d2d !important;
+    background-color: #2d2d2d !important;
+    color: #e8e8e8 !important;
+    border-color: #3a3a3a !important;
+}
+
+.book.theme-night .markdown-section table td,
+.book.theme-night .page-inner table td,
+.book.theme-night table td {
+    background: #1c1c1c !important;
+    background-color: #1c1c1c !important;
+    color: #c8c8c8 !important;
+    border-color: #3a3a3a !important;
+}
+
+.book.theme-night .markdown-section table tr:nth-child(even) td,
+.book.theme-night .page-inner table tr:nth-child(even) td,
+.book.theme-night table tr:nth-child(even) td {
+    background: #242424 !important;
+    background-color: #242424 !important;
+}
+
+.book.theme-night .markdown-section blockquote {
+    color: #999;
+    border-left-color: #3a3a3a;
+}
+
+.book.theme-night .markdown-section img {
+    opacity: 0.9;
+}
+
+.book.theme-night .page-nav {
+    background: rgba(200, 200, 200, 0.1);
+    color: #999;
+}
+
+.book.theme-night .page-nav:hover {
+    background: rgba(200, 200, 200, 0.2);
+    color: #c8c8c8;
+}
+
+.book.theme-night .sidebar-toggle,
+.book.theme-night .toc-toggle {
+    background: #262626;
+    border-color: #3a3a3a;
+}
+
+.book.theme-night .sidebar-toggle:hover,
+.book.theme-night .toc-toggle:hover {
+    background: #333;
+}
+
+.book.theme-night .sidebar-toggle svg,
+.book.theme-night .toc-toggle svg {
+    color: #999;
+}
+
+.book.theme-night .page-toc {
+    background: #1c1c1c;
+    border-left-color: #3a3a3a;
+}
+
+.book.theme-night .page-toc .toc-header {
+    color: #808080;
+    border-bottom-color: #3a3a3a;
+}
+
+.book.theme-night .page-toc .toc-list li a {
+    color: #999;
+}
+
+.book.theme-night .page-toc .toc-list li a:hover {
+    color: #6cb2eb;
+}
+
+.book.theme-night .page-toc .toc-list li.active a {
+    color: #6cb2eb;
+}
+
+.book.theme-night .fontsettings-toolbar {
+    background: #262626;
+    border-color: #3a3a3a;
+}
+
+.book.theme-night .fontsettings-toolbar button {
+    color: #999;
+}
+
+.book.theme-night .fontsettings-toolbar button:hover:not(.disabled) {
+    background: #333;
+    color: #c8c8c8;
+}
+
+.book.theme-night .fontsettings-separator {
+    background: #3a3a3a;
+}
+
+.book.theme-night .back-to-top {
+    background: #6cb2eb;
+    color: #1c1c1c;
+}
+
+.book.theme-night .back-to-top:hover {
+    background: #5a9fd8;
+}
+
+/* Mobile: hide fontsettings toolbar on small screens */
+@media (max-width: 768px) {
+    .fontsettings-toolbar {
+        right: 50px !important;
+        padding: 2px 4px;
+    }
+
+    .fontsettings-toolbar button {
+        width: 24px;
+        height: 24px;
+    }
+
+    .fontsettings-separator {
+        margin: 0 2px;
+    }
+}
+
+/* ==========================================================================
+   Glossary Terms - Tooltip Styles
+   ========================================================================== */
+
+/* Glossary term styling */
+.glossary-term {
+    position: relative;
+    cursor: help;
+    border-bottom: 1px dotted #4183c4;
+    color: inherit;
+    text-decoration: none;
+}
+
+.glossary-term:hover {
+    border-bottom-style: solid;
+    background-color: rgba(65, 131, 196, 0.1);
+}
+
+/* Tooltip container - pure CSS tooltip using ::after */
+.glossary-term::after {
+    content: attr(data-definition);
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: #333;
+    color: #fff;
+    font-size: 13px;
+    font-weight: normal;
+    line-height: 1.4;
+    text-align: left;
+    white-space: normal;
+    max-width: 300px;
+    min-width: 150px;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+    z-index: 1000;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+
+/* Tooltip arrow */
+.glossary-term::before {
+    content: "";
+    position: absolute;
+    bottom: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    margin-bottom: 2px;
+    border: 6px solid transparent;
+    border-top-color: #333;
+    z-index: 1001;
+    opacity: 0;
+    visibility: hidden;
+    transition: opacity 0.2s ease, visibility 0.2s ease;
+    pointer-events: none;
+}
+
+/* Show tooltip on hover */
+.glossary-term:hover::after,
+.glossary-term:hover::before {
+    opacity: 1;
+    visibility: visible;
+}
+
+/* Adjust tooltip position for terms near the top of the viewport */
+.glossary-term.tooltip-bottom::after {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 8px;
+}
+
+.glossary-term.tooltip-bottom::before {
+    bottom: auto;
+    top: 100%;
+    margin-bottom: 0;
+    margin-top: 2px;
+    border-top-color: transparent;
+    border-bottom-color: #333;
+}
+
+/* Theme: Sepia */
+.book.theme-sepia .glossary-term {
+    border-bottom-color: #704214;
+}
+
+.book.theme-sepia .glossary-term:hover {
+    background-color: rgba(112, 66, 20, 0.1);
+}
+
+.book.theme-sepia .glossary-term::after {
+    background: #5f4b32;
+}
+
+.book.theme-sepia .glossary-term::before {
+    border-top-color: #5f4b32;
+}
+
+.book.theme-sepia .glossary-term.tooltip-bottom::before {
+    border-top-color: transparent;
+    border-bottom-color: #5f4b32;
+}
+
+/* Theme: Night */
+.book.theme-night .glossary-term {
+    border-bottom-color: #6fa8dc;
+}
+
+.book.theme-night .glossary-term:hover {
+    background-color: rgba(111, 168, 220, 0.15);
+}
+
+.book.theme-night .glossary-term::after {
+    background: #4a4a4a;
+    color: #e0e0e0;
+}
+
+.book.theme-night .glossary-term::before {
+    border-top-color: #4a4a4a;
+}
+
+.book.theme-night .glossary-term.tooltip-bottom::before {
+    border-top-color: transparent;
+    border-bottom-color: #4a4a4a;
+}
+
+/* Mobile adjustments */
+@media (max-width: 768px) {
+    .glossary-term::after {
+        left: 0;
+        transform: none;
+        max-width: 250px;
+        min-width: 120px;
+    }
+
+    .glossary-term::before {
+        left: 20px;
+        transform: none;
+    }
+}
