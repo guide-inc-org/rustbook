@@ -25,3 +25,7 @@ guidebook build
 ## Getting Started
 
 Ready to start? Head over to the [Installation](installation.md) guide.
+
+## Cloud Hosting
+
+Deploy your documentation with [Guidebook Cloud](https://guidebook.dev) for automatic deployments on push.
