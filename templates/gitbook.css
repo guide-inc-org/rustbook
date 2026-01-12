@@ -1258,17 +1258,7 @@ body.loading .markdown-section {
 /* Mobile: hide fontsettings toolbar on small screens */
 @media (max-width: 768px) {
     .fontsettings-toolbar {
-        right: 50px !important;
-        padding: 2px 4px;
-    }
-
-    .fontsettings-toolbar button {
-        width: 24px;
-        height: 24px;
-    }
-
-    .fontsettings-separator {
-        margin: 0 2px;
+        display: none !important;
     }
 }
 
