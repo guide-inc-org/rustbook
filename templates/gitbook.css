@@ -717,6 +717,9 @@ body.loading .markdown-section {
     .toc-toggle {
         display: none !important;
     }
+    .book:not(.toc-hidden) .page-wrapper {
+        margin-right: 0;
+    }
     .book:not(.toc-hidden) .page-nav.next {
         right: 10px;
     }
