@@ -4,6 +4,7 @@ A fast, HonKit/GitBook-compatible static site generator written in Rust.
 
 [![Crates.io](https://img.shields.io/crates/v/guidebook.svg)](https://crates.io/crates/guidebook)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Feedback](https://img.shields.io/badge/Feedback-Issues%20%26%20Requests-blue)](https://github.com/guide-inc-org/guidebook-feedback)
 
 ## Quick Start
 
@@ -92,6 +93,14 @@ guidebook serve
 ```
 
 No configuration changes required.
+
+## Feedback
+
+Found a bug? Have a feature request?
+
+👉 [guidebook-feedback](https://github.com/guide-inc-org/guidebook-feedback)
+
+You can write in English, Japanese, or Vietnamese.
 
 ## License
 
