@@ -1,6 +1,6 @@
 [package]
 name = "guidebook"
-version = "0.1.41"
+version = "0.1.42"
 edition = "2021"
 description = "HonKit/GitBook compatible static book generator"
 license = "MIT"
@@ -58,3 +58,16 @@ zip = "0.6"
 
 # Open URLs in default browser
 open = "5"
+
+# HTTP client for remote image downloading
+reqwest = { version = "0.11", features = ["blocking"] }
+
+# CRC32 hashing for image filename generation
+crc32fast = "1.3"
+
+# AsciiDoc parsing
+asciidocr = "0.1"
+
+[dev-dependencies]
+# Temporary file/directory for testing
+tempfile = "3"

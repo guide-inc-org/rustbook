@@ -1,5 +1,7 @@
+mod images;
 mod nunjucks;
 mod renderer;
+pub mod svg;
 mod template;
 
 use crate::parser::{self, apply_glossary, parse_front_matter, BookConfig, Glossary, Language, Summary, SummaryItem};
@@ -12,8 +14,20 @@ use std::path::{Path, PathBuf};
 use std::time::Instant;
 
 // nunjucks module is used internally for template processing
-pub use renderer::{render_markdown, render_markdown_with_path, render_markdown_with_hardbreaks, extract_headings, TocItem};
+pub use renderer::{
+    render_markdown, render_markdown_with_path, render_markdown_with_hardbreaks,
+    render_asciidoc, render_asciidoc_with_path,
+    extract_headings, extract_headings_from_asciidoc, TocItem
+};
 pub use template::Templates;
+
+/// Check if a file is an AsciiDoc file based on its extension
+pub fn is_asciidoc_file(path: &Path) -> bool {
+    match path.extension().and_then(|s| s.to_str()) {
+        Some("adoc") | Some("asciidoc") => true,
+        _ => false,
+    }
+}
 
 /// Search index entry
 #[derive(Serialize)]
@@ -144,6 +158,8 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_sea
             &toc_items,
             front_matter.as_ref(),
         )?;
+        // Apply SVG processing if configured
+        let page_html = apply_svg_processing(page_html, output, config)?;
         fs::write(output.join("index.html"), page_html)?;
         stats.pages += 1;
     }
@@ -151,6 +167,15 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_sea
     // Generate search index (skip on hot reload for performance)
     if !skip_search_index {
         generate_search_index(source, output, &summary)?;
+    }
+
+    // Download remote images if enabled
+    if config.fetch_remote_images {
+        println!("Downloading remote images...");
+        let downloaded = process_remote_images(output)?;
+        if downloaded > 0 {
+            println!("  Downloaded {} remote images", downloaded);
+        }
     }
 
     Ok(stats)
@@ -274,26 +299,45 @@ fn build_chapters_inner(
                     // Mark as built before processing
                     built_files.insert(base_path.to_string());
 
-                    // Read and render markdown
+                    // Read file content
                     let raw_content = fs::read_to_string(&src_file)?;
                     // Parse front matter
                     let parsed = parse_front_matter(&raw_content);
                     let front_matter = parsed.front_matter;
-                    // Process @import directives before template processing
-                    let imported_content = process_imports_for_file(&parsed.content, &src_file)?;
-                    // Process Nunjucks templates (conditionals, loops, filters, variables)
-                    let content = nunjucks::process_nunjucks_templates(&imported_content, config)
-                        .unwrap_or_else(|e| {
-                            eprintln!("  Warning: Template error in {}: {}", base_path, e);
-                            imported_content.clone()
-                        });
-                    let html_content = render_markdown_with_path(&content, Some(base_path), config.hardbreaks);
+
+                    // Check if this is an AsciiDoc file
+                    let is_asciidoc = is_asciidoc_file(&src_file);
+
+                    // Render content based on file type
+                    let (html_content, toc_items) = if is_asciidoc {
+                        // AsciiDoc rendering
+                        let html = render_asciidoc_with_path(&parsed.content, Some(base_path));
+                        let toc = extract_headings_from_asciidoc(&parsed.content);
+                        (html, toc)
+                    } else {
+                        // Markdown rendering
+                        // Process @import directives before template processing
+                        let imported_content = process_imports_for_file(&parsed.content, &src_file)?;
+                        // Process Nunjucks templates (conditionals, loops, filters, variables)
+                        let content = nunjucks::process_nunjucks_templates(&imported_content, config)
+                            .unwrap_or_else(|e| {
+                                eprintln!("  Warning: Template error in {}: {}", base_path, e);
+                                imported_content.clone()
+                            });
+                        let html = render_markdown_with_path(&content, Some(base_path), config.hardbreaks);
+                        let toc = extract_headings(&content);
+                        (html, toc)
+                    };
+
                     // Apply glossary terms
                     let html_content = apply_glossary(&html_content, glossary);
-                    let toc_items = extract_headings(&content);
 
                     // Generate output path (use base_path without anchor)
-                    let html_path = base_path.replace(".md", ".html");
+                    // Handle .md, .adoc, and .asciidoc extensions
+                    let html_path = base_path
+                        .replace(".md", ".html")
+                        .replace(".adoc", ".html")
+                        .replace(".asciidoc", ".html");
                     let dest_file = output.join(&html_path);
 
                     // Calculate relative path to root
@@ -320,6 +364,9 @@ fn build_chapters_inner(
                         &toc_items,
                         front_matter.as_ref(),
                     )?;
+
+                    // Apply SVG processing if configured
+                    let page_html = apply_svg_processing(page_html, output, config)?;
 
                     // Write output
                     if let Some(parent) = dest_file.parent() {
@@ -469,13 +516,25 @@ fn collect_search_entries(
 ) -> Result<()> {
     for item in items {
         if let SummaryItem::Link { title, path, children } = item {
-            if let Some(md_path) = path {
-                let src_file = source.join(md_path);
+            if let Some(file_path) = path {
+                let src_file = source.join(file_path);
                 if src_file.exists() {
                     let content = fs::read_to_string(&src_file)?;
-                    let html_content = render_markdown(&content);
+
+                    // Render based on file type
+                    let html_content = if is_asciidoc_file(&src_file) {
+                        render_asciidoc(&content)
+                    } else {
+                        render_markdown(&content)
+                    };
+
                     let text_content = strip_html_tags(&html_content);
-                    let html_path = md_path.replace(".md", ".html");
+
+                    // Generate HTML path for any supported extension
+                    let html_path = file_path
+                        .replace(".md", ".html")
+                        .replace(".adoc", ".html")
+                        .replace(".asciidoc", ".html");
 
                     entries.push(SearchEntry {
                         title: title.clone(),
@@ -518,6 +577,43 @@ fn generate_search_index(source: &Path, output: &Path, summary: &Summary) -> Res
     fs::write(output.join("search_index.json"), json)?;
 
     Ok(())
+}
+
+/// Process all HTML files in output directory to download remote images
+/// Returns the number of images downloaded
+fn process_remote_images(output: &Path) -> Result<usize> {
+    use images::ImageDownloader;
+
+    let mut downloader = ImageDownloader::new(output);
+
+    // Walk through all HTML files in output directory
+    for entry in walkdir::WalkDir::new(output) {
+        let entry = entry?;
+        if entry.file_type().is_file() {
+            if let Some(ext) = entry.path().extension() {
+                if ext == "html" {
+                    // Read HTML file
+                    let html = fs::read_to_string(entry.path())?;
+
+                    // Process remote images
+                    match downloader.process_html(&html) {
+                        Ok(processed_html) => {
+                            // Only write back if content changed
+                            if processed_html != html {
+                                fs::write(entry.path(), processed_html)?;
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("  Warning: Failed to process {}: {}", entry.path().display(), e);
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    let (downloaded, _) = downloader.stats();
+    Ok(downloaded)
 }
 
 /// Process @import directives in Markdown content
@@ -599,6 +695,23 @@ fn process_imports_for_file(content: &str, file_path: &Path) -> Result<String> {
     let base_path = file_path.parent().unwrap_or(Path::new("."));
 
     process_imports(content, base_path, &mut visited)
+}
+
+/// Apply SVG processing to HTML based on config options
+fn apply_svg_processing(html: String, output_dir: &Path, config: &BookConfig) -> Result<String> {
+    let mut result = html;
+
+    // Apply externalize_svg if enabled
+    if config.externalize_svg == Some(true) {
+        result = svg::externalize_inline_svg(&result, output_dir)?;
+    }
+
+    // Apply inline_svg if enabled
+    if config.inline_svg == Some(true) {
+        result = svg::inline_svg_files(&result, output_dir)?;
+    }
+
+    Ok(result)
 }
 
 /// Expand book variables in Markdown content (legacy implementation)

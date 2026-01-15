@@ -1204,6 +1204,132 @@ fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String 
     new_result
 }
 
+// =============================================================================
+// AsciiDoc Rendering
+// =============================================================================
+
+/// Render AsciiDoc content to HTML
+/// Applies the same post-processing as markdown (target="_blank", link normalization, etc.)
+pub fn render_asciidoc(content: &str) -> String {
+    render_asciidoc_internal(content)
+}
+
+/// Render AsciiDoc content to HTML with path for relative link conversion
+pub fn render_asciidoc_with_path(content: &str, current_path: Option<&str>) -> String {
+    let html = render_asciidoc_internal(content);
+
+    // If we have a current path, convert relative links to absolute
+    if let Some(path) = current_path {
+        convert_relative_links_to_absolute(&html, path)
+    } else {
+        html
+    }
+}
+
+/// Extract headings from AsciiDoc content for TOC generation
+pub fn extract_headings_from_asciidoc(content: &str) -> Vec<TocItem> {
+    let mut headings = Vec::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        // AsciiDoc headings: == Level 1, === Level 2, ==== Level 3, etc.
+        if trimmed.starts_with("==") && !trimmed.starts_with("====") {
+            // Count the equals signs
+            let eq_count = trimmed.chars().take_while(|&c| c == '=').count();
+
+            // Level mapping: == is h2, === is h3, ==== is h4
+            // (= is h1 which is typically the document title)
+            if eq_count >= 2 && eq_count <= 5 {
+                let level = eq_count as u8;  // 2 = h2, 3 = h3, etc.
+                let text = trimmed[eq_count..].trim().to_string();
+
+                // Only include h2, h3, h4 in TOC (skip h1 which is page title)
+                if level >= 2 && level <= 4 && !text.is_empty() {
+                    let id = slugify(&text);
+                    headings.push(TocItem {
+                        level,
+                        text,
+                        id,
+                    });
+                }
+            }
+        }
+    }
+
+    headings
+}
+
+fn render_asciidoc_internal(content: &str) -> String {
+    // Normalize CRLF/CR to LF for consistent line handling
+    let content = content.replace("\r\n", "\n").replace("\r", "\n");
+
+    // Strip all UTF-8 BOM characters
+    let content = content.replace('\u{FEFF}', "");
+
+    // Use asciidocr to convert to HTML
+    // 1. Create a Scanner to tokenize the content
+    let scanner = asciidocr::scanner::Scanner::new(&content);
+
+    // 2. Create a Parser and parse the tokens (parser expects iterator of Result<Token, ScannerError>)
+    let mut parser = asciidocr::parser::Parser::new(std::path::PathBuf::from("."));
+
+    match parser.parse(scanner) {
+        Ok(asg) => {
+            // 3. Render the ASG to HTMLBook
+            match asciidocr::backends::htmls::render_htmlbook(&asg) {
+                Ok(html) => {
+                    // Apply the same post-processing as markdown
+                    let html = fix_asciidoc_relative_links(&html);
+                    let html = remove_leading_slash_from_links(&html);
+                    let html = autolink_urls(&html);
+                    let html = add_target_blank_to_external_links(&html);
+
+                    html
+                }
+                Err(e) => {
+                    eprintln!("  Warning: AsciiDoc conversion error: {:?}", e);
+                    format!("<p>{}</p>", html_escape(&content))
+                }
+            }
+        }
+        Err(e) => {
+            eprintln!("  Warning: AsciiDoc parsing error: {:?}", e);
+            // Return the content wrapped in a simple paragraph as fallback
+            format!("<p>{}</p>", html_escape(&content))
+        }
+    }
+}
+
+/// Fix relative links in AsciiDoc output
+/// Converts .adoc and .asciidoc links to .html
+fn fix_asciidoc_relative_links(html: &str) -> String {
+    let mut result = html.to_string();
+
+    // Replace .adoc and .asciidoc links with .html
+    let patterns = [
+        (r#".adoc""#, r#".html""#),
+        (r#".adoc#"#, r#".html#"#),
+        (r#".adoc'"#, r#".html'"#),
+        (r#".asciidoc""#, r#".html""#),
+        (r#".asciidoc#"#, r#".html#"#),
+        (r#".asciidoc'"#, r#".html'"#),
+        // Also handle .md links for mixed content
+        (r#".md""#, r#".html""#),
+        (r#".md#"#, r#".html#"#),
+        (r#".md'"#, r#".html'"#),
+    ];
+
+    for (from, to) in patterns {
+        result = result.replace(from, to);
+    }
+
+    // Normalize backslashes to forward slashes in href attributes
+    result = normalize_path_separators(&result);
+
+    result
+}
+
 
 #[cfg(test)]
 mod tests {

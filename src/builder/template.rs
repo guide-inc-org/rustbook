@@ -55,6 +55,7 @@ impl Templates {
         context.insert("back_to_top", &config.is_plugin_enabled("back-to-top-button"));
         context.insert("mermaid", &config.is_plugin_enabled("mermaid-md-adoc"));
         context.insert("fontsettings", &config.is_plugin_enabled("fontsettings"));
+        context.insert("math", &config.math);
 
         // Generate TOC HTML
         let toc_html = generate_toc_html(toc_items);
@@ -245,6 +246,17 @@ const PAGE_TEMPLATE: &str = r##"<!DOCTYPE html>
     {% if mermaid %}
     <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
     <script>mermaid.initialize({startOnLoad:true});</script>
+    {% endif %}
+    {% if math %}
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.css">
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/katex.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.9/dist/contrib/auto-render.min.js"
+            onload="renderMathInElement(document.body, {
+                delimiters: [
+                    {left: '$$', right: '$$', display: true},
+                    {left: '$', right: '$', display: false}
+                ]
+            });"></script>
     {% endif %}
 </head>
 <body class="book font-family-1" data-root-path="{{ root_path }}">

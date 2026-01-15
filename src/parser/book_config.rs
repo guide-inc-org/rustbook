@@ -31,6 +31,26 @@ pub struct BookConfig {
     /// This makes trailing spaces unnecessary for line breaks
     #[serde(default)]
     pub hardbreaks: bool,
+
+    /// When true, enable KaTeX math rendering
+    /// Supports $...$ for inline math and $$...$$ for display math
+    #[serde(default)]
+    pub math: bool,
+
+    /// When true, externalize inline SVGs to separate files for better caching
+    /// Icon SVGs (with fill="currentColor") are kept inline
+    #[serde(default)]
+    pub externalize_svg: Option<bool>,
+
+    /// When true, inline SVG files into HTML for fewer HTTP requests
+    /// Icon SVGs (with fill="currentColor") are kept as img tags
+    #[serde(default)]
+    pub inline_svg: Option<bool>,
+
+    /// When true, download remote (https://) images at build time for offline viewing
+    /// Images are cached in _remote_images/ directory with CRC32-based filenames
+    #[serde(default, rename = "fetchRemoteImages")]
+    pub fetch_remote_images: bool,
 }
 
 impl BookConfig {
@@ -165,5 +185,33 @@ mod tests {
         let json = r#"{"title": "Test"}"#;
         let config: BookConfig = serde_json::from_str(json).unwrap();
         assert!(config.variables.is_empty());
+    }
+
+    #[test]
+    fn test_math_enabled() {
+        let json = r#"{"title": "Test", "math": true}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert!(config.math);
+    }
+
+    #[test]
+    fn test_math_disabled_by_default() {
+        let json = r#"{"title": "Test"}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert!(!config.math);
+    }
+
+    #[test]
+    fn test_fetch_remote_images_enabled() {
+        let json = r#"{"title": "Test", "fetchRemoteImages": true}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert!(config.fetch_remote_images);
+    }
+
+    #[test]
+    fn test_fetch_remote_images_disabled_by_default() {
+        let json = r#"{"title": "Test"}"#;
+        let config: BookConfig = serde_json::from_str(json).unwrap();
+        assert!(!config.fetch_remote_images);
     }
 }
