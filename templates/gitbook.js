@@ -242,9 +242,28 @@
     // Prevent rapid navigation
     var isNavigating = false;
 
+    // Convert sidebar hrefs to absolute URLs on initial load
+    // This ensures right-click > "Open in new tab" works correctly after SPA navigation
+    function normalizeSidebarHrefs() {
+        var sidebar = document.querySelector('.book-summary');
+        if (!sidebar) return;
+
+        sidebar.querySelectorAll('a[href]').forEach(function(link) {
+            var href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('http') || href.startsWith('/')) return;
+
+            // Convert relative href to absolute URL
+            var absoluteUrl = new URL(href, baseUrl).href;
+            link.setAttribute('href', absoluteUrl);
+        });
+    }
+
     function setupSpaNavigation() {
         var sidebar = document.querySelector('.book-summary');
         if (!sidebar) return;
+
+        // Normalize hrefs to absolute URLs for correct browser-native behavior
+        normalizeSidebarHrefs();
 
         sidebar.addEventListener('click', function(e) {
             var link = e.target.closest('a');
@@ -255,7 +274,17 @@
             // - Text click: collapsible.js returns without stopping, so this handler runs for SPA navigation
 
             var href = link.getAttribute('href');
-            if (!href || href.startsWith('#') || href.startsWith('http')) return;
+            if (!href || href.startsWith('#')) return;
+
+            // Allow modifier key clicks to use browser default behavior (open in new tab)
+            if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+                return;
+            }
+
+            // Skip external links
+            if (href.startsWith('http') && !href.startsWith(window.location.origin)) {
+                return;
+            }
 
             e.preventDefault();
             if (isNavigating) return;
@@ -267,6 +296,11 @@
     function setupPageNavigation() {
         document.querySelectorAll('.page-nav').forEach(function(nav) {
             nav.addEventListener('click', function(e) {
+                // Allow modifier key clicks to use browser default behavior (open in new tab)
+                if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) {
+                    return;
+                }
+
                 e.preventDefault();
                 if (isNavigating) return;
 
