@@ -146,8 +146,8 @@ pub fn parse_summary(content: &str) -> Result<Summary> {
                 let path = if path.is_empty() || path == "#" {
                     None
                 } else {
-                    // Normalize path: remove leading ./ if present
-                    Some(path.trim_start_matches("./").to_string())
+                    // Normalize path: remove leading ./ and / if present (HonKit compatibility)
+                    Some(path.trim_start_matches("./").trim_start_matches('/').to_string())
                 };
                 current_link = Some((String::new(), path));
             }
@@ -354,6 +354,35 @@ mod tests {
             assert_eq!(children.len(), 1, "Item 1 should have 1 child (tab-indented)");
         } else {
             panic!("Expected Link for Item 1");
+        }
+    }
+
+    #[test]
+    fn test_parse_absolute_paths() {
+        // Test absolute paths (leading /) - HonKit compatibility
+        let content = r#"# Summary
+
+* [Relative](chapter1.md)
+* [With Dot Slash](./chapter2.md)
+* [Absolute](/chapter3.md)
+* [Absolute Nested](/dir/chapter4.md)
+"#;
+
+        let summary = parse_summary(content).unwrap();
+        assert_eq!(summary.items.len(), 4);
+
+        // Verify paths are normalized (leading / and ./ removed)
+        if let SummaryItem::Link { path, .. } = &summary.items[0] {
+            assert_eq!(path.as_deref(), Some("chapter1.md"));
+        }
+        if let SummaryItem::Link { path, .. } = &summary.items[1] {
+            assert_eq!(path.as_deref(), Some("chapter2.md"), "./ should be removed");
+        }
+        if let SummaryItem::Link { path, .. } = &summary.items[2] {
+            assert_eq!(path.as_deref(), Some("chapter3.md"), "Leading / should be removed");
+        }
+        if let SummaryItem::Link { path, .. } = &summary.items[3] {
+            assert_eq!(path.as_deref(), Some("dir/chapter4.md"), "Leading / should be removed from nested path");
         }
     }
 }

@@ -1,6 +1,6 @@
 [package]
 name = "guidebook"
-version = "0.1.44"
+version = "0.1.45"
 edition = "2021"
 description = "HonKit/GitBook compatible static book generator"
 license = "MIT"
