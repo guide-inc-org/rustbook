@@ -173,7 +173,13 @@ fn serve_book(source: &PathBuf, port: u16, open_browser: bool) -> Result<()> {
             );
             if dominated {
                 // Check if it's a relevant file (md, json, css, js)
+                // Exclude _book directory and other build artifacts
                 let dominated = event.paths.iter().any(|p| {
+                    // Skip files in _book directory (build output)
+                    let path_str = p.to_string_lossy();
+                    if path_str.contains("/_book/") || path_str.contains("\\_book\\") {
+                        return false;
+                    }
                     p.extension()
                         .and_then(|e| e.to_str())
                         .map(|e| matches!(e, "md" | "json" | "css" | "js" | "html"))

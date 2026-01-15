@@ -59,7 +59,9 @@ pub fn extract_headings(content: &str) -> Vec<TocItem> {
 /// current_path: the path of the current markdown file (e.g., "Customer/AssetStatus/PortfolioTop.md")
 /// hardbreaks: when true, treat single newlines as hard breaks (<br>)
 pub fn render_markdown_with_path(content: &str, current_path: Option<&str>, hardbreaks: bool) -> String {
-    let html = render_markdown_internal(content, hardbreaks);
+    // Normalize CRLF/CR to LF for consistent line handling
+    let content = content.replace("\r\n", "\n").replace("\r", "\n");
+    let html = render_markdown_internal(&content, hardbreaks);
 
     // If we have a current path, convert relative links to absolute
     if let Some(path) = current_path {
@@ -71,17 +73,24 @@ pub fn render_markdown_with_path(content: &str, current_path: Option<&str>, hard
 
 /// Render markdown content to HTML (backward compatible)
 pub fn render_markdown(content: &str) -> String {
-    render_markdown_internal(content, false)
+    // Normalize CRLF/CR to LF for consistent line handling
+    let content = content.replace("\r\n", "\n").replace("\r", "\n");
+    render_markdown_internal(&content, false)
 }
 
 /// Render markdown content to HTML with hardbreaks option
 pub fn render_markdown_with_hardbreaks(content: &str, hardbreaks: bool) -> String {
-    render_markdown_internal(content, hardbreaks)
+    // Normalize CRLF/CR to LF for consistent line handling
+    let content = content.replace("\r\n", "\n").replace("\r", "\n");
+    render_markdown_internal(&content, hardbreaks)
 }
 
 fn render_markdown_internal(content: &str, hardbreaks: bool) -> String {
+    // Strip all UTF-8 BOM characters (fixes reference link parsing issues)
+    // BOM can appear at start of file or in concatenated content from @import
+    let content = content.replace('\u{FEFF}', "");
     // Preprocess: fix full-width spaces after heading markers
-    let content = fix_fullwidth_heading_spaces(content);
+    let content = fix_fullwidth_heading_spaces(&content);
     // Preprocess: fix image paths with spaces
     let content = fix_image_paths_with_spaces(&content);
     // Preprocess: fix multi-line footnotes without proper indentation
@@ -111,6 +120,7 @@ fn render_markdown_internal(content: &str, hardbreaks: bool) -> String {
     let mut mermaid_content = String::new();
     let mut in_heading: Option<HeadingLevel> = None;
     let mut heading_text = String::new();
+    let mut custom_heading_id: Option<String> = None;  // Store custom ID from {#id} syntax
     let mut events: Vec<Event> = Vec::new();
 
     for event in parser {
@@ -137,22 +147,25 @@ fn render_markdown_internal(content: &str, hardbreaks: bool) -> String {
                 mermaid_content.push_str(text);
                 continue;
             }
-            // Track heading start
-            Event::Start(Tag::Heading { level, .. }) => {
+            // Track heading start and capture custom ID from {#id} syntax
+            Event::Start(Tag::Heading { level, id, .. }) => {
                 in_heading = Some(*level);
                 heading_text.clear();
-                events.push(event);
+                // Capture custom ID if provided via {#custom-id} syntax
+                custom_heading_id = id.as_ref().map(|s| s.to_string());
+                events.push(event.clone());
                 continue;
             }
             // Capture heading text
             Event::Text(text) if in_heading.is_some() => {
                 heading_text.push_str(text);
-                events.push(event);
+                events.push(event.clone());
                 continue;
             }
             // End of heading: inject ID
             Event::End(TagEnd::Heading(level)) if in_heading.is_some() => {
-                let id = slugify(&heading_text);
+                // Use custom ID if provided, otherwise generate from heading text
+                let id = custom_heading_id.take().unwrap_or_else(|| slugify(&heading_text));
                 let level_num = heading_level_to_num(*level);
                 // Pop the heading content and rebuild with ID
                 let mut heading_events = Vec::new();
@@ -189,8 +202,14 @@ fn render_markdown_internal(content: &str, hardbreaks: bool) -> String {
     // Fix relative links: convert .md to .html
     html_output = fix_relative_links(&html_output);
 
+    // Remove leading slashes from internal links
+    html_output = remove_leading_slash_from_links(&html_output);
+
     // Auto-link URLs that are not already linked
     html_output = autolink_urls(&html_output);
+
+    // Add target="_blank" to external links (Markdown-style links like [text](https://...))
+    html_output = add_target_blank_to_external_links(&html_output);
 
     // Convert any remaining markdown images inside HTML blocks to <img> tags
     html_output = convert_remaining_markdown_images(&html_output);
@@ -243,9 +262,67 @@ fn html_escape(s: &str) -> String {
         .replace('"', "&quot;")
 }
 
+/// Collect reference link definitions from markdown content
+/// Returns a map of label -> url
+fn collect_reference_links(content: &str) -> std::collections::HashMap<String, String> {
+    let mut links = std::collections::HashMap::new();
+
+    for line in content.lines() {
+        let trimmed = line.trim();
+        // Match [label]: url pattern (but not footnote definitions [^n]:)
+        if trimmed.starts_with('[') && !trimmed.starts_with("[^") {
+            if let Some(bracket_end) = trimmed.find("]:") {
+                let label = &trimmed[1..bracket_end];
+                let url = trimmed[bracket_end + 2..].trim();
+                if !label.is_empty() && !url.is_empty() {
+                    // Remove optional angle brackets around URL
+                    let url = url.trim_start_matches('<').trim_end_matches('>');
+                    links.insert(label.to_lowercase(), url.to_string());
+                }
+            }
+        }
+    }
+
+    links
+}
+
+/// Resolve reference links in text (e.g., [A] -> <a href="url">A</a>)
+fn resolve_reference_links(text: &str, reference_links: &std::collections::HashMap<String, String>) -> String {
+    let mut result = String::new();
+    let mut chars = text.char_indices().peekable();
+
+    while let Some((i, c)) = chars.next() {
+        if c == '[' {
+            // Check for [label] pattern
+            let rest = &text[i + 1..];
+            if let Some(end) = rest.find(']') {
+                let label = &rest[..end];
+                // Check if this is followed by another bracket (like [label][ref]) - skip these
+                let after_bracket = &rest[end + 1..];
+                if !after_bracket.starts_with('[') && !after_bracket.starts_with('(') {
+                    // This is a reference link [label]
+                    if let Some(url) = reference_links.get(&label.to_lowercase()) {
+                        result.push_str(&format!("<a href=\"{}\">{}</a>", url, label));
+                        // Skip past the [label]
+                        for _ in 0..=end {
+                            chars.next();
+                        }
+                        continue;
+                    }
+                }
+            }
+        }
+        result.push(c);
+    }
+
+    result
+}
 
 /// Convert footnote definitions in-place to HTML (preserve original position)
 fn convert_footnote_definitions_inline(content: &str, hardbreaks: bool) -> String {
+    // Collect reference link definitions for resolving within footnotes
+    let reference_links = collect_reference_links(content);
+
     let mut result_lines = Vec::new();
     let lines: Vec<&str> = content.lines().collect();
     let mut i = 0;
@@ -257,6 +334,10 @@ fn convert_footnote_definitions_inline(content: &str, hardbreaks: bool) -> Strin
             let (number, first_line_content) = captures;
             // Trim trailing whitespace from first line (for hardbreaks consistency)
             let first_line_content = first_line_content.trim_end();
+
+            // Resolve reference links in the first line content
+            let first_line_resolved = resolve_reference_links(first_line_content, &reference_links);
+
             let mut continuation_lines: Vec<String> = Vec::new();
 
             // Collect continuation lines (indented or list items until next footnote/heading/blank)
@@ -276,8 +357,9 @@ fn convert_footnote_definitions_inline(content: &str, hardbreaks: bool) -> Strin
                     break;
                 }
 
-                // This is a continuation line
-                continuation_lines.push(next_line.to_string());
+                // This is a continuation line - resolve reference links
+                let resolved_line = resolve_reference_links(next_line, &reference_links);
+                continuation_lines.push(resolved_line);
                 i += 1;
             }
 
@@ -290,18 +372,20 @@ fn convert_footnote_definitions_inline(content: &str, hardbreaks: bool) -> Strin
             );
 
             if continuation_lines.is_empty() {
-                // Single-line footnote: <sup>n</sup>. content ↩
+                // Single-line footnote: <blockquote><sup>n</sup>. content ↩</blockquote>
+                // Use blockquote to match HonKit styling (left border)
                 result_lines.push(format!(
                     "<blockquote id=\"fn_{}\"><sup>{}</sup>. {}{}</blockquote>",
-                    number, number, first_line_content, return_link
+                    number, number, first_line_resolved, return_link
                 ));
             } else {
-                // Multi-line footnote: first line with return link, then rest as markdown
+                // Multi-line footnote: first line in blockquote, continuation outside
+                // This matches HonKit behavior: blockquote has border, continuation doesn't
                 let continuation_content = continuation_lines.join("\n");
                 let continuation_html = render_footnote_continuation(&continuation_content, hardbreaks);
                 result_lines.push(format!(
-                    "<blockquote id=\"fn_{}\"><sup>{}</sup>. {}{}\n{}</blockquote>",
-                    number, number, first_line_content, return_link, continuation_html
+                    "<blockquote id=\"fn_{}\"><sup>{}</sup>. {}{}</blockquote>\n{}",
+                    number, number, first_line_resolved, return_link, continuation_html
                 ));
             }
         } else {
@@ -565,20 +649,40 @@ fn is_table_separator_row(line: &str) -> bool {
 }
 
 /// Generate a separator row with the specified number of columns
-/// Tries to preserve alignment style from the original separator
+/// Preserves per-column alignment from the original separator
 fn generate_separator_row(col_count: usize, original: &str) -> String {
-    // Detect alignment style from original
-    let alignment = if original.contains(":--:") || original.contains(":-:") {
-        ":--:"
-    } else if original.contains(":--") || original.contains(":-") {
-        ":--"
-    } else if original.contains("--:") || original.contains("-:") {
-        "--:"
-    } else {
-        "--"
-    };
+    // Parse alignments from original separator row
+    let trimmed = original.trim();
+    let original_alignments: Vec<&str> = trimmed
+        .trim_start_matches('|')
+        .trim_end_matches('|')
+        .split('|')
+        .map(|cell| {
+            let cell = cell.trim();
+            if cell.starts_with(':') && cell.ends_with(':') {
+                ":--:"  // center
+            } else if cell.starts_with(':') {
+                ":--"   // left (explicit)
+            } else if cell.ends_with(':') {
+                "--:"   // right
+            } else {
+                "--"    // left (default)
+            }
+        })
+        .collect();
 
-    let cols: Vec<&str> = std::iter::repeat(alignment).take(col_count).collect();
+    // Build new separator with correct number of columns
+    // Use original alignments where available, default to "--" for extra columns
+    let cols: Vec<&str> = (0..col_count)
+        .map(|i| {
+            if i < original_alignments.len() {
+                original_alignments[i]
+            } else {
+                "--"  // default alignment for extra columns
+            }
+        })
+        .collect();
+
     format!("|{}|", cols.join("|"))
 }
 
@@ -699,6 +803,137 @@ fn fix_relative_links(html: &str) -> String {
 
     for (from, to) in patterns {
         result = result.replace(from, to);
+    }
+
+    // Normalize backslashes to forward slashes in href attributes
+    result = normalize_path_separators(&result);
+
+    result
+}
+
+/// Remove leading slashes from internal links
+/// Converts href="/path/to/file" → href="path/to/file"
+/// Skips protocol-relative URLs (//example.com) and external links
+fn remove_leading_slash_from_links(html: &str) -> String {
+    let mut result = String::new();
+    let mut chars = html.char_indices().peekable();
+
+    while let Some((_, c)) = chars.next() {
+        result.push(c);
+
+        // Check for href=" or src="
+        if c == '"' || c == '\'' {
+            let quote_char = c;
+            // Check if this is after href= or src= (check last 6 ASCII chars)
+            let suffix: String = result.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
+            let is_href_or_src = suffix.to_lowercase().ends_with("href=") || suffix.to_lowercase().ends_with("src=");
+
+            if is_href_or_src {
+                // Collect the URL
+                let mut url = String::new();
+                while let Some((_, ch)) = chars.next() {
+                    if ch == quote_char {
+                        // Check if URL starts with single / (not //)
+                        let processed_url = if url.starts_with('/') && !url.starts_with("//") {
+                            // Check if it's an internal link (not external)
+                            let lower = url.to_lowercase();
+                            if !lower.starts_with("/http://") && !lower.starts_with("/https://") {
+                                // Remove the leading slash
+                                url.chars().skip(1).collect()
+                            } else {
+                                url
+                            }
+                        } else {
+                            url
+                        };
+                        result.push_str(&processed_url);
+                        result.push(quote_char);
+                        break;
+                    }
+                    url.push(ch);
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// Convert backslashes to forward slashes in href and src attributes
+/// Handles Windows-style paths like href="path\to\file" → href="path/to/file"
+fn normalize_path_separators(html: &str) -> String {
+    let mut result = String::new();
+    let mut chars = html.char_indices().peekable();
+
+    while let Some((_, c)) = chars.next() {
+        result.push(c);
+
+        // Check for href=" or src="
+        if c == '"' || c == '\'' {
+            let quote_char = c;
+            // Check if this is after href= or src= (check last 6 ASCII chars)
+            let suffix: String = result.chars().rev().take(6).collect::<Vec<_>>().into_iter().rev().collect();
+            let is_href_or_src = suffix.to_lowercase().ends_with("href=") || suffix.to_lowercase().ends_with("src=");
+
+            if is_href_or_src {
+                // Collect the URL and normalize backslashes
+                let mut url = String::new();
+                while let Some((_, ch)) = chars.next() {
+                    if ch == quote_char {
+                        // Normalize backslashes to forward slashes
+                        let normalized_url = url.replace('\\', "/");
+                        result.push_str(&normalized_url);
+                        result.push(quote_char);
+                        break;
+                    }
+                    url.push(ch);
+                }
+            }
+        }
+    }
+
+    result
+}
+
+/// Add target="_blank" rel="noopener noreferrer" to external links that don't have target attribute
+/// This handles Markdown-style links [text](https://...) that were converted to <a href="...">
+fn add_target_blank_to_external_links(html: &str) -> String {
+    let mut result = String::new();
+    let mut chars = html.char_indices().peekable();
+
+    while let Some((i, c)) = chars.next() {
+        if c == '<' && html[i..].starts_with("<a ") {
+            // Found an anchor tag start
+            let mut tag_content = String::from("<a ");
+            // Skip past "<a "
+            chars.next(); // 'a'
+            chars.next(); // ' '
+
+            // Collect the entire tag until '>'
+            while let Some((_, ch)) = chars.next() {
+                tag_content.push(ch);
+                if ch == '>' {
+                    break;
+                }
+            }
+
+            // Check if this is an external link without target attribute
+            let tag_lower = tag_content.to_lowercase();
+            let has_target = tag_lower.contains("target=");
+            let is_external = tag_lower.contains("href=\"http://") || tag_lower.contains("href=\"https://")
+                || tag_lower.contains("href='http://") || tag_lower.contains("href='https://");
+
+            if is_external && !has_target {
+                // Insert target="_blank" rel="noopener noreferrer" before the closing >
+                let without_close = tag_content.trim_end_matches('>');
+                result.push_str(without_close);
+                result.push_str(" target=\"_blank\" rel=\"noopener noreferrer\">");
+            } else {
+                result.push_str(&tag_content);
+            }
+        } else {
+            result.push(c);
+        }
     }
 
     result
@@ -935,7 +1170,7 @@ fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String 
             let url = &result[url_start..url_end];
 
             // Check if this is an internal link that needs conversion
-            // Skip: external links (http/https), anchor-only (#), already relative (../ or ./), absolute (/)
+            // Skip: external links (http/https), anchor-only (#), already relative (../ or ./), absolute (/), data URIs
             let needs_conversion = !url.is_empty()
                 && !url.starts_with("http://")
                 && !url.starts_with("https://")
@@ -945,6 +1180,7 @@ fn convert_relative_links_to_absolute(html: &str, current_path: &str) -> String 
                 && !url.starts_with('/')
                 && !url.starts_with("mailto:")
                 && !url.starts_with("javascript:")
+                && !url.starts_with("data:")
                 && depth > 0;
 
             if needs_conversion {
@@ -1125,6 +1361,68 @@ fn test_footnote_in_table() {
     println!("HTML: {}", html);
     // Check that table cells are separate
     assert!(html.contains("<td>data</td>") || html.contains(">data<"), "data should be in its own cell: {}", html);
+}
+
+#[test]
+fn test_reference_link_basic() {
+    // Test basic reference link functionality
+    let md = r#"[改定履歴][AL_RH]
+
+[AL_RH]: #改訂履歴"#;
+    let html = render_markdown(md);
+    println!("Test 1 (basic with space): {}", html);
+    assert!(html.contains("<a "), "Reference link should create anchor: {}", html);
+}
+
+#[test]
+fn test_reference_link_no_space() {
+    // Test reference link without space after colon (HonKit format)
+    let md = r#"[改定履歴][AL_RH]
+
+[AL_RH]:#改訂履歴"#;
+    let html = render_markdown(md);
+    println!("Test 2 (no space): {}", html);
+    // This might fail - checking pulldown-cmark behavior
+    assert!(html.contains("<a "), "Reference link without space should work: {}", html);
+}
+
+#[test]
+fn test_reference_link_after_html_comment() {
+    // Test reference link definition after HTML comment
+    let md = r#"[改定履歴][AL_RH]
+
+<!-- 目次 -->
+[AL_RH]: #改訂履歴"#;
+    let html = render_markdown(md);
+    println!("Test 3 (after HTML comment): {}", html);
+    assert!(html.contains("<a "), "Reference link after HTML comment should work: {}", html);
+}
+
+#[test]
+fn test_reference_link_after_html_comment_with_blank_line() {
+    // Test reference link definition after HTML comment with blank line
+    let md = r#"[改定履歴][AL_RH]
+
+<!-- 目次 -->
+
+[AL_RH]: #改訂履歴"#;
+    let html = render_markdown(md);
+    println!("Test 4 (after HTML comment with blank line): {}", html);
+    assert!(html.contains("<a "), "Reference link after HTML comment with blank line should work: {}", html);
+}
+
+#[test]
+fn test_reference_link_with_bom() {
+    // Test reference link with UTF-8 BOM at start of definitions
+    // BOM is \xEF\xBB\xBF (357 273 277 in octal)
+    let bom = "\u{FEFF}";
+    let md = format!(r#"[改定履歴][AL_RH]
+
+{}<!-- 目次 -->
+[AL_RH]:#改訂履歴"#, bom);
+    let html = render_markdown(&md);
+    println!("Test 5 (with BOM): {}", html);
+    assert!(html.contains("<a "), "Reference link with BOM should work: {}", html);
 }
 
 #[test]

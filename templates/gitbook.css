@@ -383,6 +383,9 @@ body.loading .markdown-section {
 .markdown-section table td {
     border: 1px solid #dfe2e5;
     padding: 8px 12px;
+}
+
+.markdown-section table td {
     text-align: left;
 }
 

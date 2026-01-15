@@ -1,3 +1,4 @@
+mod nunjucks;
 mod renderer;
 mod template;
 
@@ -5,10 +6,12 @@ use crate::parser::{self, apply_glossary, parse_front_matter, BookConfig, Glossa
 use anyhow::{Context, Result};
 use regex::Regex;
 use serde::Serialize;
+use std::collections::HashSet;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::time::Instant;
 
+// nunjucks module is used internally for template processing
 pub use renderer::{render_markdown, render_markdown_with_path, render_markdown_with_hardbreaks, extract_headings, TocItem};
 pub use template::Templates;
 
@@ -115,8 +118,14 @@ fn build_single_book(source: &Path, output: &Path, config: &BookConfig, skip_sea
         // Parse front matter
         let parsed = parse_front_matter(&raw_content);
         let front_matter = parsed.front_matter;
-        // Expand variables before rendering
-        let content = expand_variables(&parsed.content, config);
+        // Process @import directives before template processing
+        let imported_content = process_imports_for_file(&parsed.content, &readme_path)?;
+        // Process Nunjucks templates (conditionals, loops, filters, variables)
+        let content = nunjucks::process_nunjucks_templates(&imported_content, config)
+            .unwrap_or_else(|e| {
+                eprintln!("  Warning: Template error in README.md: {}", e);
+                imported_content.clone()
+            });
         let html_content = render_markdown_with_hardbreaks(&content, config.hardbreaks);
         // Apply glossary terms
         let html_content = apply_glossary(&html_content, &glossary);
@@ -270,8 +279,14 @@ fn build_chapters_inner(
                     // Parse front matter
                     let parsed = parse_front_matter(&raw_content);
                     let front_matter = parsed.front_matter;
-                    // Expand variables before rendering
-                    let content = expand_variables(&parsed.content, config);
+                    // Process @import directives before template processing
+                    let imported_content = process_imports_for_file(&parsed.content, &src_file)?;
+                    // Process Nunjucks templates (conditionals, loops, filters, variables)
+                    let content = nunjucks::process_nunjucks_templates(&imported_content, config)
+                        .unwrap_or_else(|e| {
+                            eprintln!("  Warning: Template error in {}: {}", base_path, e);
+                            imported_content.clone()
+                        });
                     let html_content = render_markdown_with_path(&content, Some(base_path), config.hardbreaks);
                     // Apply glossary terms
                     let html_content = apply_glossary(&html_content, glossary);
@@ -505,33 +520,179 @@ fn generate_search_index(source: &Path, output: &Path, summary: &Summary) -> Res
     Ok(())
 }
 
-/// Expand book variables in Markdown content
+/// Process @import directives in Markdown content
+/// Replaces <!-- @import("path/to/file.md") --> with the contents of the referenced file
+/// Supports recursive imports with loop prevention
+fn process_imports(content: &str, base_path: &Path, visited: &mut HashSet<PathBuf>) -> Result<String> {
+    // Regex to match <!-- @import("path/to/file") --> with optional whitespace
+    let re = Regex::new(r#"<!--\s*@import\s*\(\s*"([^"]+)"\s*\)\s*-->"#).unwrap();
+
+    let mut result = content.to_string();
+    let mut offset: i64 = 0;
+
+    for caps in re.captures_iter(content) {
+        let full_match = caps.get(0).unwrap();
+        let import_path = &caps[1];
+
+        // Resolve the path relative to the base_path (directory containing the current file)
+        let resolved_path = base_path.join(import_path);
+        let canonical_path = match resolved_path.canonicalize() {
+            Ok(p) => p,
+            Err(_) => {
+                // File doesn't exist, leave the directive as-is and warn
+                eprintln!("  Warning: @import file not found: {}", resolved_path.display());
+                continue;
+            }
+        };
+
+        // Check for circular imports
+        if visited.contains(&canonical_path) {
+            eprintln!("  Warning: Circular @import detected, skipping: {}", canonical_path.display());
+            continue;
+        }
+
+        // Mark this file as visited
+        visited.insert(canonical_path.clone());
+
+        // Read the imported file
+        let imported_content = match fs::read_to_string(&canonical_path) {
+            Ok(c) => {
+                // Strip UTF-8 BOM if present (fixes reference link parsing)
+                c.strip_prefix('\u{FEFF}').unwrap_or(&c).to_string()
+            },
+            Err(e) => {
+                eprintln!("  Warning: Failed to read @import file {}: {}", canonical_path.display(), e);
+                continue;
+            }
+        };
+
+        // Recursively process imports in the imported content
+        // Use the directory of the imported file as the new base path
+        let import_base_path = canonical_path.parent().unwrap_or(base_path);
+        let processed_content = process_imports(&imported_content, import_base_path, visited)?;
+
+        // Calculate the adjusted positions accounting for previous replacements
+        let start = (full_match.start() as i64 + offset) as usize;
+        let end = (full_match.end() as i64 + offset) as usize;
+
+        // Replace the directive with the processed content
+        result.replace_range(start..end, &processed_content);
+
+        // Update offset for subsequent replacements
+        offset += processed_content.len() as i64 - (full_match.end() - full_match.start()) as i64;
+    }
+
+    Ok(result)
+}
+
+/// Process @import directives starting from a file path
+/// This is a convenience wrapper that initializes the visited set
+fn process_imports_for_file(content: &str, file_path: &Path) -> Result<String> {
+    let mut visited = HashSet::new();
+
+    // Add the current file to visited set to prevent self-imports
+    if let Ok(canonical) = file_path.canonicalize() {
+        visited.insert(canonical);
+    }
+
+    // Get the directory containing the file as the base path
+    let base_path = file_path.parent().unwrap_or(Path::new("."));
+
+    process_imports(content, base_path, &mut visited)
+}
+
+/// Expand book variables in Markdown content (legacy implementation)
+/// Note: This is now superseded by nunjucks::process_nunjucks_templates
+/// but kept for backward compatibility tests
 /// Replaces {{ book.xxx }} patterns with values from config.variables
+/// Preserves variables inside code blocks (``` ... ```) and inline code (` ... `)
+#[cfg(test)]
 fn expand_variables(content: &str, config: &BookConfig) -> String {
     if config.variables.is_empty() {
         return content.to_string();
     }
 
-    // Match {{ book.xxx }} pattern with optional whitespace
-    // Also match {{book.xxx}} without spaces
-    let re = Regex::new(r"\{\{\s*book\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}").unwrap();
+    // Strategy: Find protected regions (code blocks and inline code) first,
+    // then only apply variable expansion outside these regions
 
-    re.replace_all(content, |caps: &regex::Captures| {
-        let var_name = &caps[1];
-        if let Some(value) = config.variables.get(var_name) {
-            // Convert JSON value to string
-            match value {
-                serde_json::Value::String(s) => s.clone(),
-                serde_json::Value::Number(n) => n.to_string(),
-                serde_json::Value::Bool(b) => b.to_string(),
-                _ => value.to_string(), // For arrays/objects, use JSON representation
-            }
+    // Find all protected regions (fenced code blocks and inline code)
+    let protected_regions = find_protected_regions(content);
+
+    // Match {{ book.xxx }} pattern with optional whitespace
+    let var_re = Regex::new(r"\{\{\s*book\.([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}").unwrap();
+
+    let mut result = String::new();
+    let mut last_end = 0;
+
+    for caps in var_re.captures_iter(content) {
+        let full_match = caps.get(0).unwrap();
+        let start = full_match.start();
+        let end = full_match.end();
+
+        // Check if this match is inside a protected region
+        let is_protected = protected_regions.iter().any(|(region_start, region_end)| {
+            start >= *region_start && end <= *region_end
+        });
+
+        // Add content before this match
+        result.push_str(&content[last_end..start]);
+
+        if is_protected {
+            // Inside code block/inline code - keep original
+            result.push_str(&content[start..end]);
         } else {
-            // Variable not found, keep original text
-            caps[0].to_string()
+            // Outside code - perform replacement
+            let var_name = &caps[1];
+            if let Some(value) = config.variables.get(var_name) {
+                let replacement = match value {
+                    serde_json::Value::String(s) => s.clone(),
+                    serde_json::Value::Number(n) => n.to_string(),
+                    serde_json::Value::Bool(b) => b.to_string(),
+                    _ => value.to_string(),
+                };
+                result.push_str(&replacement);
+            } else {
+                // Variable not found, keep original text
+                result.push_str(&content[start..end]);
+            }
         }
-    })
-    .to_string()
+
+        last_end = end;
+    }
+
+    // Add remaining content after last match
+    result.push_str(&content[last_end..]);
+
+    result
+}
+
+/// Find all protected regions in the content (code blocks and inline code)
+/// Returns a vector of (start, end) byte positions
+/// Note: This is now superseded by nunjucks module's protected region handling
+/// but kept for backward compatibility tests
+#[cfg(test)]
+fn find_protected_regions(content: &str) -> Vec<(usize, usize)> {
+    let mut regions = Vec::new();
+
+    // Find fenced code blocks (``` ... ```) - must come first as they take priority
+    let fenced_re = Regex::new(r"(?s)```[^\n]*\n.*?```").unwrap();
+    for m in fenced_re.find_iter(content) {
+        regions.push((m.start(), m.end()));
+    }
+
+    // Find inline code (` ... `) but not if inside fenced blocks
+    let inline_re = Regex::new(r"`[^`\n]+`").unwrap();
+    for m in inline_re.find_iter(content) {
+        // Only add if not overlapping with existing regions
+        let overlaps = regions.iter().any(|(start, end)| {
+            m.start() >= *start && m.end() <= *end
+        });
+        if !overlaps {
+            regions.push((m.start(), m.end()));
+        }
+    }
+
+    regions
 }
 
 fn copy_gitbook_static_to_root(output: &Path) -> Result<()> {
@@ -694,5 +855,117 @@ mod tests {
         let result = expand_variables(content, &config);
 
         assert_eq!(result, "# Version 1.0.0\n\nThis is version 1.0.0.");
+    }
+
+    #[test]
+    fn test_expand_variables_preserves_code_blocks() {
+        let mut vars = HashMap::new();
+        vars.insert("version".to_string(), serde_json::json!("1.0.0"));
+
+        let config = create_test_config(vars);
+        let content = r#"Version: {{ book.version }}
+
+```javascript
+// This should not be expanded
+const version = "{{ book.version }}";
+console.log(version);
+```
+
+After code block: {{ book.version }}"#;
+
+        let result = expand_variables(content, &config);
+
+        // Variables outside code blocks should be expanded
+        assert!(result.contains("Version: 1.0.0"));
+        assert!(result.contains("After code block: 1.0.0"));
+        // Variables inside code blocks should NOT be expanded
+        assert!(result.contains(r#"const version = "{{ book.version }}";"#));
+    }
+
+    #[test]
+    fn test_expand_variables_preserves_inline_code() {
+        let mut vars = HashMap::new();
+        vars.insert("var".to_string(), serde_json::json!("value"));
+
+        let config = create_test_config(vars);
+        let content = "Normal: {{ book.var }}, inline: `{{ book.var }}`, after: {{ book.var }}";
+        let result = expand_variables(content, &config);
+
+        assert_eq!(result, "Normal: value, inline: `{{ book.var }}`, after: value");
+    }
+
+    #[test]
+    fn test_expand_variables_multiple_code_blocks() {
+        let mut vars = HashMap::new();
+        vars.insert("x".to_string(), serde_json::json!("X"));
+
+        let config = create_test_config(vars);
+        let content = r#"{{ book.x }}
+```
+{{ book.x }}
+```
+{{ book.x }}
+```rust
+{{ book.x }}
+```
+{{ book.x }}"#;
+
+        let result = expand_variables(content, &config);
+
+        // Count occurrences of "X" (expanded) and "{{ book.x }}" (not expanded)
+        let x_count = result.matches("X").count();
+        let template_count = result.matches("{{ book.x }}").count();
+
+        // 3 outside code blocks should be expanded
+        assert_eq!(x_count, 3);
+        // 2 inside code blocks should NOT be expanded
+        assert_eq!(template_count, 2);
+    }
+
+    #[test]
+    fn test_find_protected_regions_fenced_code() {
+        let content = "text\n```\ncode\n```\nmore text";
+        let regions = find_protected_regions(content);
+
+        assert_eq!(regions.len(), 1);
+        // The region should cover the entire code block
+        let (start, end) = regions[0];
+        assert!(content[start..end].starts_with("```"));
+        assert!(content[start..end].ends_with("```"));
+    }
+
+    #[test]
+    fn test_find_protected_regions_inline_code() {
+        let content = "text `inline` more text";
+        let regions = find_protected_regions(content);
+
+        assert_eq!(regions.len(), 1);
+        let (start, end) = regions[0];
+        assert_eq!(&content[start..end], "`inline`");
+    }
+
+    #[test]
+    fn test_find_protected_regions_multiple() {
+        let content = "`a` text `b` more\n```\nblock\n```\nend";
+        let regions = find_protected_regions(content);
+
+        // Should find: 1 fenced block + 2 inline codes
+        assert_eq!(regions.len(), 3);
+    }
+
+    #[test]
+    fn test_process_imports_regex_pattern() {
+        // Test the regex pattern matches correctly
+        let re = Regex::new(r#"<!--\s*@import\s*\(\s*"([^"]+)"\s*\)\s*-->"#).unwrap();
+
+        // Should match
+        assert!(re.is_match(r#"<!-- @import("file.md") -->"#));
+        assert!(re.is_match(r#"<!--@import("file.md")-->"#));
+        assert!(re.is_match(r#"<!--  @import( "file.md" )  -->"#));
+        assert!(re.is_match(r#"<!-- @import("path/to/file.md") -->"#));
+
+        // Should not match
+        assert!(!re.is_match(r#"@import("file.md")"#)); // No HTML comment
+        assert!(!re.is_match(r#"<!-- @import('file.md') -->"#)); // Single quotes
     }
 }
