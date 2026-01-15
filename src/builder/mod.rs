@@ -279,10 +279,11 @@ fn build_chapters_inner(
         if let SummaryItem::Link { title, path, children } = item {
             if let Some(md_path) = path {
                 // Extract base file path (remove anchor #xxx if present)
+                // Also strip leading slash to handle absolute-style paths in SUMMARY.md
                 let base_path = if let Some(hash_pos) = md_path.find('#') {
-                    &md_path[..hash_pos]
+                    md_path[..hash_pos].trim_start_matches('/')
                 } else {
-                    md_path.as_str()
+                    md_path.trim_start_matches('/')
                 };
 
                 // Skip if already built (avoid duplicate builds for anchor-only references)
@@ -517,6 +518,8 @@ fn collect_search_entries(
     for item in items {
         if let SummaryItem::Link { title, path, children } = item {
             if let Some(file_path) = path {
+                // Strip leading slash to handle absolute-style paths in SUMMARY.md
+                let file_path = file_path.trim_start_matches('/');
                 let src_file = source.join(file_path);
                 if src_file.exists() {
                     let content = fs::read_to_string(&src_file)?;

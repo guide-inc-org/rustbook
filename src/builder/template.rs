@@ -123,7 +123,9 @@ fn flatten_pages(items: &[SummaryItem]) -> Vec<(String, String)> {
     for item in items {
         if let SummaryItem::Link { title, path, children } = item {
             if let Some(md_path) = path {
+                // Remove leading slash and convert extension to .html
                 let html_path = md_path
+                    .trim_start_matches('/')
                     .replace(".md", ".html")
                     .replace(".adoc", ".html")
                     .replace(".asciidoc", ".html");
@@ -143,8 +145,10 @@ fn generate_sidebar(items: &[SummaryItem], current_path: Option<&str>, prefix: &
     for item in items {
         match item {
             SummaryItem::Link { title, path, children } => {
+                // Remove leading slash and convert extension to .html
                 let html_path = path.as_ref().map(|p| {
-                    p.replace(".md", ".html")
+                    p.trim_start_matches('/')
+                        .replace(".md", ".html")
                         .replace(".adoc", ".html")
                         .replace(".asciidoc", ".html")
                 });
