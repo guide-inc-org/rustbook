@@ -329,14 +329,40 @@ fn build_chapters_inner(
 
 fn copy_assets(source: &Path, output: &Path) -> Result<usize> {
     let mut count = 0;
-    // Copy common asset directories
-    for dir_name in &["assets", "images", "img"] {
+    let asset_dir_names: &[&str] = &["assets", "images", "image", "img"];
+
+    // Copy root-level asset directories
+    for dir_name in asset_dir_names {
         let src_dir = source.join(dir_name);
         if src_dir.exists() {
             let dest_dir = output.join(dir_name);
             count += copy_dir_recursive_count(&src_dir, &dest_dir)?;
         }
     }
+
+    // Also copy nested asset directories (e.g., chapter/image/)
+    for entry in walkdir::WalkDir::new(source)
+        .into_iter()
+        .filter_entry(|e| {
+            // Skip root-level asset dirs (already copied) and output directories
+            let name = e.file_name().to_string_lossy();
+            !(e.depth() == 1 && asset_dir_names.contains(&name.as_ref()))
+                && name != "_book"
+                && name != "node_modules"
+        })
+    {
+        let entry = entry?;
+        if entry.file_type().is_dir() {
+            let name = entry.file_name().to_string_lossy();
+            if asset_dir_names.contains(&name.as_ref()) {
+                // Found a nested asset directory
+                let relative = entry.path().strip_prefix(source)?;
+                let dest_dir = output.join(relative);
+                count += copy_dir_recursive_count(entry.path(), &dest_dir)?;
+            }
+        }
+    }
+
     Ok(count)
 }
 
