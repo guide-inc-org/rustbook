@@ -123,7 +123,10 @@ fn flatten_pages(items: &[SummaryItem]) -> Vec<(String, String)> {
     for item in items {
         if let SummaryItem::Link { title, path, children } = item {
             if let Some(md_path) = path {
-                let html_path = md_path.replace(".md", ".html");
+                let html_path = md_path
+                    .replace(".md", ".html")
+                    .replace(".adoc", ".html")
+                    .replace(".asciidoc", ".html");
                 pages.push((html_path, title.clone()));
             }
             // Recursively add children
@@ -140,7 +143,11 @@ fn generate_sidebar(items: &[SummaryItem], current_path: Option<&str>, prefix: &
     for item in items {
         match item {
             SummaryItem::Link { title, path, children } => {
-                let html_path = path.as_ref().map(|p| p.replace(".md", ".html"));
+                let html_path = path.as_ref().map(|p| {
+                    p.replace(".md", ".html")
+                        .replace(".adoc", ".html")
+                        .replace(".asciidoc", ".html")
+                });
                 let is_active = current_path.map(|cp| {
                     html_path.as_ref().map(|hp| cp == hp).unwrap_or(false)
                 }).unwrap_or(false);

@@ -1279,6 +1279,9 @@ fn render_asciidoc_internal(content: &str) -> String {
             // 3. Render the ASG to HTMLBook
             match asciidocr::backends::htmls::render_htmlbook(&asg) {
                 Ok(html) => {
+                    // Extract just the body content (asciidocr outputs full HTML document)
+                    let html = extract_body_content(&html);
+
                     // Apply the same post-processing as markdown
                     let html = fix_asciidoc_relative_links(&html);
                     let html = remove_leading_slash_from_links(&html);
@@ -1299,6 +1302,21 @@ fn render_asciidoc_internal(content: &str) -> String {
             format!("<p>{}</p>", html_escape(&content))
         }
     }
+}
+
+/// Extract body content from full HTML document
+/// asciidocr outputs full HTML with <!DOCTYPE>, <html>, <head>, <body>
+/// We only need the content inside <body>
+fn extract_body_content(html: &str) -> String {
+    // Try to find <body> and </body> tags
+    if let Some(body_start) = html.find("<body>") {
+        let content_start = body_start + 6; // length of "<body>"
+        if let Some(body_end) = html.find("</body>") {
+            return html[content_start..body_end].trim().to_string();
+        }
+    }
+    // If no body tags found, return as-is
+    html.to_string()
 }
 
 /// Fix relative links in AsciiDoc output
