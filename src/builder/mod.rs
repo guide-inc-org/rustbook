@@ -418,7 +418,17 @@ fn copy_dir_recursive_count(src: &Path, dest: &Path) -> Result<usize> {
             if let Some(parent) = dest_path.parent() {
                 fs::create_dir_all(parent)?;
             }
-            fs::copy(entry.path(), &dest_path)?;
+            // Use symlinks on Unix for faster builds (no actual file copy)
+            // Falls back to copy on Windows
+            #[cfg(unix)]
+            {
+                let abs_src = entry.path().canonicalize()?;
+                std::os::unix::fs::symlink(&abs_src, &dest_path)?;
+            }
+            #[cfg(not(unix))]
+            {
+                fs::copy(entry.path(), &dest_path)?;
+            }
             count += 1;
         }
     }
