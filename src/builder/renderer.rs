@@ -287,28 +287,59 @@ fn collect_reference_links(content: &str) -> std::collections::HashMap<String, S
 }
 
 /// Resolve reference links in text (e.g., [A] -> <a href="url">A</a>)
+/// Handles both shortcut style [label] and full style [text][ref]
 fn resolve_reference_links(text: &str, reference_links: &std::collections::HashMap<String, String>) -> String {
     let mut result = String::new();
     let mut chars = text.char_indices().peekable();
 
     while let Some((i, c)) = chars.next() {
         if c == '[' {
-            // Check for [label] pattern
-            let rest = &text[i + 1..];
-            if let Some(end) = rest.find(']') {
-                let label = &rest[..end];
-                // Check if this is followed by another bracket (like [label][ref]) - skip these
-                let after_bracket = &rest[end + 1..];
-                if !after_bracket.starts_with('[') && !after_bracket.starts_with('(') {
-                    // This is a reference link [label]
-                    if let Some(url) = reference_links.get(&label.to_lowercase()) {
-                        result.push_str(&format!("<a href=\"{}\">{}</a>", url, label));
-                        // Skip past the [label]
-                        for _ in 0..=end {
-                            chars.next();
+            // Check for [label] or [text][ref] pattern
+            let rest = &text[i + c.len_utf8()..];
+            if let Some(end_byte) = rest.find(']') {
+                let first_label = &rest[..end_byte];
+                let after_bracket = &rest[end_byte + 1..];
+
+                // Check for full reference link [text][ref]
+                if after_bracket.starts_with('[') {
+                    // Find the second closing bracket
+                    let after_second_open = &after_bracket[1..];
+                    if let Some(second_end_byte) = after_second_open.find(']') {
+                        let ref_label = &after_second_open[..second_end_byte];
+                        // Look up the reference (use ref_label, or first_label if ref is empty)
+                        let lookup_key = if ref_label.is_empty() {
+                            first_label.to_lowercase()
+                        } else {
+                            ref_label.to_lowercase()
+                        };
+                        if let Some(url) = reference_links.get(&lookup_key) {
+                            result.push_str(&format!("<a href=\"{}\">{}</a>", url, first_label));
+                            // Skip past [text][ref] - count characters (not bytes) to skip
+                            // Pattern: [text][ref] - we need to skip: text + ] + [ + ref + ]
+                            let chars_to_skip = first_label.chars().count() + 1 + 1 + ref_label.chars().count() + 1;
+                            for _ in 0..chars_to_skip {
+                                chars.next();
+                            }
+                            continue;
                         }
-                        continue;
                     }
+                }
+
+                // Check for inline link [text](url) - skip these, pulldown-cmark handles them
+                if after_bracket.starts_with('(') {
+                    result.push(c);
+                    continue;
+                }
+
+                // This is a shortcut reference link [label]
+                if let Some(url) = reference_links.get(&first_label.to_lowercase()) {
+                    result.push_str(&format!("<a href=\"{}\">{}</a>", url, first_label));
+                    // Skip past the [label] - count characters to skip: label + ]
+                    let chars_to_skip = first_label.chars().count() + 1;
+                    for _ in 0..chars_to_skip {
+                        chars.next();
+                    }
+                    continue;
                 }
             }
         }
@@ -1575,4 +1606,37 @@ fn test_footnote_with_list() {
     let html = render_footnote_continuation(content, false);
     println!("Footnote continuation HTML: {}", html);
     assert!(html.contains("<li>") && html.contains("<ul>"), "Should contain list: {}", html);
+}
+
+#[test]
+fn test_full_reference_link_in_footnote() {
+    // Test [text][ref] pattern in footnotes - the bug that was reported
+    let md = r#"Text[^1].
+
+[^1]: .paymentAvailableStatus=[未申込][決済方法申込状態]の場合: "銀行引落(登録)"
+
+[決済方法申込状態]:#決済方法申込状態"#;
+    let html = render_markdown(md);
+    println!("Full reference link in footnote: {}", html);
+    // The [未申込] should become a link with href="#決済方法申込状態"
+    assert!(html.contains("<a href=\"#決済方法申込状態\">未申込</a>"),
+        "Full reference link [text][ref] should be resolved: {}", html);
+    // The text after should be preserved
+    assert!(html.contains("の場合:"),
+        "Text after reference link should be preserved: {}", html);
+}
+
+#[test]
+fn test_resolve_reference_links_full_style() {
+    // Direct test of resolve_reference_links function with [text][ref] pattern
+    let mut refs = std::collections::HashMap::new();
+    refs.insert("決済方法申込状態".to_lowercase(), "#決済方法申込状態".to_string());
+
+    let input = "[未申込][決済方法申込状態]の場合";
+    let output = resolve_reference_links(input, &refs);
+    println!("Resolved: {}", output);
+    assert!(output.contains("<a href=\"#決済方法申込状態\">未申込</a>"),
+        "Should resolve [text][ref]: {}", output);
+    assert!(output.contains("の場合"),
+        "Text after link should be preserved: {}", output);
 }
